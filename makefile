@@ -1,14 +1,14 @@
 CC	= gcc
-CFLAGS	= -Wall -Wextra -g
+CFLAGS	= -Wall -Wextra -g -lm $(shell sdl-config --cflags --libs)
 OBJ	= src/gfx.o
 
 HFILES	= src/gfx.h
 
 %.o:	%.c $(HFILES)
-	$(CC) $(CFLAGS) -o $@ -c $<
+	$(CC) -o $@ -c $< $(CFLAGS)
 
 gfx:	$(OBJ) $(HFILES)
-	$(CC) $(CFLAGS) $(OBJ) -o $@
+	$(CC) $(OBJ) -o $@ $(CFLAGS)
 
 .PHONY:	clean
 

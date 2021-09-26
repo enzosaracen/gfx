@@ -4,26 +4,40 @@
 
 #define W 	500
 #define H 	500
-#define NCTX	50
+#define NCTX	100
 
 typedef uint8_t		uint8;
 typedef uint32_t	uint32;
 typedef unsigned int	uint;
+typedef	double		doub;
 
-typedef union		Obj Obj;
+typedef struct		Obj Obj;
+typedef struct		Ctx Ctx;
 
-struct Obj {
-	uint id;
-	union {
-		struct Circ {
-			double x, y, r;
-		} circ;
-		struct Rect {
-			double x, y, l, w; 
-		} rect;
-	};
-	Obj *link;
+enum {
+	OCIRC,
+	ORECT,
 };
 
-/* wrap-around array, collisions handled using obj links */
-Obj *ctx[NCTX]; 
+struct Obj {
+	uint	id;
+	doub	cx, cy;
+	int	type;
+	Obj	*link;
+	Ctx	*ctx;
+	uint32	col;
+	union {
+		struct Circ {
+			doub r;
+		} circ;
+		struct Rect {
+			doub l, w; 
+		} rect;
+	};
+};
+
+/* wrap-around array of size NCTX, collisions handled using obj links */
+struct Ctx {
+	uint cid;
+	Obj **o;
+};
