@@ -15,24 +15,27 @@ typedef struct		Obj Obj;
 typedef struct		Ctx Ctx;
 
 enum {
-	OCIRC,
+	OLINE,
 	ORECT,
+	OCIRC,
 };
 
 struct Obj {
 	uint	id;
-	int	cx, cy;
 	int	type;
 	uint32	col;
 	Obj	*link;
 	Ctx	*ctx;
 	union {
-		struct Circ {
-			int r;
-		} circ;
+		struct Line {
+			int x0, y0, x1, y1;
+		} line;
 		struct Rect {
-			int l, w; 
+			int tx, ty, bx, by;
 		} rect;
+		struct Circ {
+			int cx, cy, r;
+		} circ;
 	};
 };
 
@@ -48,7 +51,8 @@ void	init();
 void	draw();
 void	put(uint32, int, int);
 uint32	rgb(uint8, uint8, uint8);
-void	putline(uint32, int, int ,int, int);
+void	putline(uint32, int, int, int, int);
+void	putrect(uint32, int, int, int, int);
 void	putcirc(uint32, int, int, int);
 Ctx	*newctx(void);
 void	drawctx(Ctx *);

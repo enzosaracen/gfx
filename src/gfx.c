@@ -95,9 +95,18 @@ void putline(uint32 col, int x0, int y0, int x1, int y1)
 	}
 }
 
+void putrect(uint32 col, int tx, int ty, int bx, int by)
+{
+	putline(col, tx, ty, tx, by);
+	putline(col, tx, by, bx, by);
+	putline(col, bx, by, bx, ty);
+	putline(col, bx, ty, tx, ty);
+}
+
 void putcirc(uint32 col, int cx, int cy, int r)
 {
 	int x, y, r2;
+
 	r2 = r*r;
 	put(col, cx, cy+r);
 	put(col, cx, cy-r);
@@ -105,7 +114,7 @@ void putcirc(uint32 col, int cx, int cy, int r)
 	put(col, cx-r, cy);
 
 	x = 1;
-	y = (int)(sqrt(r2 - 1) + 0.5);
+	y = sqrt(r2 - 1) + 0.5;
 	while(x < y) {
 		put(col, cx+x, cy+y);
 		put(col, cx+x, cy-y);
@@ -150,16 +159,22 @@ void drawctx(Ctx *ctx)
 		while(p != NULL) {
 			col = p->col;
 			switch(p->type) {
-			case OCIRC:
-				putcirc(col, p->cx, p->cy, p->circ.r);
+			case OLINE:
+				putline(col, p->line.x0, p->line.y0, p->line.x1, p->line.y1);
 				break;
 			case ORECT:
+				putrect(col, p->rect.tx, p->rect.ty, p->rect.bx, p->rect.by);
+				break;
+			case OCIRC:
+				putcirc(col, p->circ.cx, p->circ.cy, p->circ.r);
+				break;
 			default:
 				errorf("bad obj type");
 			}
 			p = p->link;
 		}
 	}
+	draw();
 }
 
 uint addobj(Ctx *ctx, uint32 col, int type)
@@ -190,7 +205,9 @@ int main(void)
 	putline(rgb(0xff, 0xff, 0xff), W/2, H/2, W/2, H/2 - 50);
 	putline(rgb(0xff, 0xff, 0xff), W/2, H/2, W/2 + 50, H/2);
 	putline(rgb(0xff, 0xff, 0xff), W/2, H/2, W/2 - 50, H/2);
+	putcirc(rgb(0xff, 0xff, 0xff), W/2, H/2, 50);
+	putrect(rgb(0xff, 0xff, 0xff), W/2 - 50, H/2 - 50, W/2 + 50, H/2 + 50);
 	draw();
-	SDL_Delay(1000);
+	SDL_Delay(5000);
 	SDL_Quit();
 }
