@@ -33,6 +33,17 @@ void *emalloc(size_t n)
 	return p;
 }
 
+void init(void)
+{
+	if(SDL_Init(SDL_INIT_VIDEO) < 0)
+		sdlerror("SDL_Init");
+
+	scr = SDL_SetVideoMode(W, H, 32, 0);
+	if(scr == NULL)
+		sdlerror("SDL_SetVideoMode");
+	SDL_WM_SetCaption("gfx", "");
+}
+
 void draw(void)
 {
 	if(SDL_LockSurface(scr) < 0)
@@ -50,6 +61,8 @@ void put(uint32 col, int x, int y)
 		return;
 	for(i = 0; i < 4; i++)
 		rast[(y*W + x)*4 + i] = col>>i*8 & 0xff;
+	draw();
+	SDL_Delay(10);
 }
 
 uint32 rgb(uint8 r, uint8 g, uint8 b)
@@ -57,66 +70,60 @@ uint32 rgb(uint8 r, uint8 g, uint8 b)
 	return SDL_MapRGB(scr->format, r, g, b);
 }
 
-void drawctx(Ctx *ctx)
+void putline(uint32 col, int x0, int y0, int x1, int y1)
 {
-	int i, x, y, cx, cy, r, r2;
-	uint32 col;
-	Obj *p;
+	int dx, dy, xi, yi, e, e2;
 
-	for(i = 0; i < NCTX; i++) {
-		p = ctx->o[i];
-		while(p != NULL) {
-			cx = p->cx;
-			cy = p->cy;
-			col = p->col;
-			switch(p->type) {
-			case OCIRC:
-				r = p->circ.r;
-				r2 = r*r;
-				put(col, cx, cy+r);
-				put(col, cx, cy-r);
-				put(col, cx+r, cy);
-				put(col, cx-r, cy);
-
-				x = 1;
-				y = sqrt(r2 - 1) + 0.5;
-				while(x < y) {
-					put(col, cx+x, cy+y);
-					put(col, cx+x, cy-y);
-					put(col, cx-x, cy+y);
-					put(col, cx-x, cy-y);
-					put(col, cx+y, cy+x);
-					put(col, cx+y, cy-x);
-					put(col, cx-y, cy+x);
-					put(col, cx-y, cy-x);
-					x++;
-					y = sqrt(r2 - x*x) + 0.5;
-				}
-				if(x == y) {
-					put(col, cx+x, cy+y);
-					put(col, cx+x, cy-y);
-					put(col, cx-x, cy+y);
-					put(col, cx-x, cy-y);
-				}
-				draw();
-				break;
-			case ORECT:
-			default:
-				errorf("bad obj type");
-			}
-			p = p->link;
+	dx = abs(x1 - x0);
+	dy = -abs(y1 - y0);
+	xi = x0 < x1 ? 1 : -1;
+	yi = y0 < y1 ? 1 : -1;
+	e = dx + dy;
+	while(1) {
+		put(col, x0, y0);
+		if(x0 == x1 && y0 == y1)
+			break;
+		e2 = 2*e;
+		if(e2 >= dy) {
+			e += dy;
+			x0 += xi;
+		}
+		if(e2 <= dx) {
+			e += dx;
+			y0 += yi;
 		}
 	}
 }
 
-void init(void)
+void putcirc(uint32 col, int cx, int cy, int r)
 {
-	if(SDL_Init(SDL_INIT_VIDEO) < 0)
-		sdlerror("SDL_Init");
+	int x, y, r2;
+	r2 = r*r;
+	put(col, cx, cy+r);
+	put(col, cx, cy-r);
+	put(col, cx+r, cy);
+	put(col, cx-r, cy);
 
-	scr = SDL_SetVideoMode(W, H, 32, 0);
-	if(scr == NULL)
-		sdlerror("SDL_SetVideoMode");
+	x = 1;
+	y = (int)(sqrt(r2 - 1) + 0.5);
+	while(x < y) {
+		put(col, cx+x, cy+y);
+		put(col, cx+x, cy-y);
+		put(col, cx-x, cy+y);
+		put(col, cx-x, cy-y);
+		put(col, cx+y, cy+x);
+		put(col, cx+y, cy-x);
+		put(col, cx-y, cy+x);
+		put(col, cx-y, cy-x);
+		x++;
+		y = sqrt(r2 - x*x) + 0.5;
+	}
+	if(x == y) {
+		put(col, cx+x, cy+y);
+		put(col, cx+x, cy-y);
+		put(col, cx-x, cy+y);
+		put(col, cx-x, cy-y);
+	}
 }
 
 Ctx *newctx(void)
@@ -132,32 +139,58 @@ Ctx *newctx(void)
 	return ctx;
 }
 
-uint circ(Ctx *ctx, uint32 col, doub cx, doub cy, doub r)
+void drawctx(Ctx *ctx)
 {
-	Obj *circ;
+	int i;
+	uint32 col;
+	Obj *p;
 
-	circ = emalloc(sizeof(Obj));
-	circ->type = OCIRC;
-	circ->ctx = ctx;
-	circ->id = ctx->cid++;
-	circ->col = col;
-	circ->link = NULL;
-	circ->cx = cx;
-	circ->cy = cy;
-	circ->circ.r = r;
+	for(i = 0; i < NCTX; i++) {
+		p = ctx->o[i];
+		while(p != NULL) {
+			col = p->col;
+			switch(p->type) {
+			case OCIRC:
+				putcirc(col, p->cx, p->cy, p->circ.r);
+				break;
+			case ORECT:
+			default:
+				errorf("bad obj type");
+			}
+			p = p->link;
+		}
+	}
+}
 
-	ctx->o[circ->id % NCTX] = circ;
-	return circ->id;
+uint addobj(Ctx *ctx, uint32 col, int type)
+{
+	Obj *o, *d;
+
+	o = emalloc(sizeof(Obj));
+	o->type = type;
+	o->ctx = ctx;
+	o->id = ctx->cid++;
+	o->col = col;
+	o->link = NULL;
+
+	if((d = ctx->o[o->id % NCTX]) != NULL)
+		o->link = d;
+	ctx->o[o->id % NCTX] = o;
+	return o->id;
 }
 
 int main(void)
 {
-	Ctx *ctx;
-
 	init();
-	ctx = newctx();
-	circ(ctx, rgb(0xff, 0xff, 0xff), W/2, H/2, 100);
-	drawctx(ctx);
+	putline(rgb(0xff, 0xff, 0xff), W/2, H/2, W/2 + 50, H/2 + 50);
+	putline(rgb(0xff, 0xff, 0xff), W/2, H/2, W/2 + 50, H/2 - 50);
+	putline(rgb(0xff, 0xff, 0xff), W/2, H/2, W/2 - 50, H/2 + 50);
+	putline(rgb(0xff, 0xff, 0xff), W/2, H/2, W/2 - 50, H/2 - 50);
+	putline(rgb(0xff, 0xff, 0xff), W/2, H/2, W/2, H/2 + 50);
+	putline(rgb(0xff, 0xff, 0xff), W/2, H/2, W/2, H/2 - 50);
+	putline(rgb(0xff, 0xff, 0xff), W/2, H/2, W/2 + 50, H/2);
+	putline(rgb(0xff, 0xff, 0xff), W/2, H/2, W/2 - 50, H/2);
+	draw();
 	SDL_Delay(1000);
 	SDL_Quit();
 }
