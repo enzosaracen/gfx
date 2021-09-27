@@ -1,6 +1,7 @@
 CC	= gcc
 CFLAGS	= -Wall -Wextra -g -lm $(shell sdl-config --cflags --libs)
-OBJ	= src/gfx.o
+OBJ	= src/gfx.o \
+	  src/map.o
 
 HFILES	= src/gfx.h
 

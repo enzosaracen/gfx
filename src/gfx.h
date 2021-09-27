@@ -1,7 +1,9 @@
 #include <SDL.h>
+#include <time.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdlib.h>
 
 #define W 		500
 #define H 		500
@@ -27,13 +29,13 @@ struct Obj {
 	Obj	*link;
 	Ctx	*ctx;
 	union {
-		struct Line {
+		struct {
 			int x0, y0, x1, y1;
 		} line;
-		struct Rect {
+		struct {
 			int tx, ty, bx, by;
 		} rect;
-		struct Circ {
+		struct {
 			int cx, cy, r;
 		} circ;
 	};
@@ -43,6 +45,7 @@ struct Obj {
 struct Ctx {
 	uint	cid;
 	Obj	**o;
+	double	scale;
 };
 
 void	errorf(char *, ...);
@@ -56,4 +59,9 @@ void	putrect(uint32, int, int, int, int);
 void	putcirc(uint32, int, int, int);
 Ctx	*newctx(void);
 void	drawctx(Ctx *);
-uint	addobj(Ctx *, uint32, int);
+Obj	*addobj(Ctx *, uint32);
+void	setline(Obj *, int, int, int, int);
+void	setrect(Obj *, int, int, int, int);
+void	setcirc(Obj *, int, int, int);
+void	ctxtrs(Ctx *, int, int);
+void	clrast(void);
