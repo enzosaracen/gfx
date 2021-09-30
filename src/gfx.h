@@ -31,9 +31,10 @@ struct Obj {
 	union {
 		struct {
 			int x0, y0, x1, y1;
+			double ir, ao, dx, dy;
 		} line;
 		struct {
-			int tx, ty, bx, by;
+			int x, y, w, h;
 		} rect;
 		struct {
 			int cx, cy, r;
@@ -46,6 +47,7 @@ struct Ctx {
 	uint	cid;
 	Obj	**o;
 	double	scale;
+	int	xtr, ytr;
 };
 
 void	errorf(char *, ...);
@@ -53,6 +55,7 @@ void	*emalloc(size_t);
 void	init();
 void	draw();
 void	put(uint32, int, int);
+void	clrast(void);
 uint32	rgb(uint8, uint8, uint8);
 void	putline(uint32, int, int, int, int);
 void	putrect(uint32, int, int, int, int);
@@ -63,5 +66,4 @@ Obj	*addobj(Ctx *, uint32);
 void	setline(Obj *, int, int, int, int);
 void	setrect(Obj *, int, int, int, int);
 void	setcirc(Obj *, int, int, int);
-void	ctxtrs(Ctx *, int, int);
-void	clrast(void);
+void	rotline(Obj *, double);

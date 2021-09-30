@@ -3,6 +3,7 @@
 SDL_Surface	*scr;
 uint8		rast[W*H*4];
 double		csf;
+int		xtr, ytr;
 
 void sdlerror(char *s)
 {
@@ -44,6 +45,8 @@ void init(void)
 		sdlerror("SDL_SetVideoMode");
 	SDL_WM_SetCaption("gfx", "");
 	csf = 1;
+	xtr = 0;
+	ytr = 0;
 }
 
 void draw(void)
@@ -59,12 +62,19 @@ void put(uint32 col, int x, int y)
 {
 	int i;
 
-	x *= csf;
-	y *= csf;
+	x += xtr;
+	y += ytr;
+	x = -csf*(W/2-x) + W/2;
+	y = -csf*(H/2-y) + H/2;
 	if(x >= W || x < 0 || y >= H || y < 0)
 		return;
 	for(i = 0; i < 4; i++)
 		rast[(y*W + x)*4 + i] = col>>i*8 & 0xff;
+}
+
+void clrast(void)
+{
+	memset(rast, 0, W*H*4);
 }
 
 uint32 rgb(uint8 r, uint8 g, uint8 b)
@@ -97,12 +107,16 @@ void putline(uint32 col, int x0, int y0, int x1, int y1)
 	}
 }
 
-void putrect(uint32 col, int tx, int ty, int bx, int by)
+void putrect(uint32 col, int x, int y, int w, int h)
 {
-	putline(col, tx, ty, tx, by);
-	putline(col, tx, by, bx, by);
-	putline(col, bx, by, bx, ty);
-	putline(col, bx, ty, tx, ty);
+	int nx, ny;
+
+	nx = x + w;
+	ny = y + h;
+	putline(col, x, y, x, ny);
+	putline(col, x, ny, nx, ny);
+	putline(col, nx, ny, nx, y);
+	putline(col, nx, y, x, y);
 }
 
 void putcirc(uint32 col, int cx, int cy, int r)
@@ -148,6 +162,7 @@ Ctx *newctx(void)
 		ctx->o[i] = NULL;
 	ctx->cid = 0;
 	ctx->scale = 1;
+	ctx->xtr = ctx->ytr = 0;
 	return ctx;
 }
 
@@ -157,6 +172,8 @@ void drawctx(Ctx *ctx)
 	Obj *p;
 
 	csf = ctx->scale;
+	xtr = ctx->xtr;
+	ytr = ctx->ytr;
 	for(i = 0; i < NCTX; i++) {
 		p = ctx->o[i];
 		while(p != NULL) {
@@ -165,7 +182,7 @@ void drawctx(Ctx *ctx)
 				putline(p->col, p->line.x0, p->line.y0, p->line.x1, p->line.y1);
 				break;
 			case ORECT:
-				putrect(p->col, p->rect.tx, p->rect.ty, p->rect.bx, p->rect.by);
+				putrect(p->col, p->rect.x, p->rect.y, p->rect.w, p->rect.h);
 				break;
 			case OCIRC:
 				putcirc(p->col, p->circ.cx, p->circ.cy, p->circ.r);
@@ -178,6 +195,7 @@ void drawctx(Ctx *ctx)
 	}
 	draw();
 	csf = 1;
+	xtr = ytr = 0;
 }
 
 Obj *addobj(Ctx *ctx, uint32 col)
@@ -198,20 +216,28 @@ Obj *addobj(Ctx *ctx, uint32 col)
 
 void setline(Obj *o, int x0, int y0, int x1, int y1)
 {
+	double dx, dy;
+
 	o->type = OLINE;
 	o->line.x0 = x0;
 	o->line.y0 = y0;
 	o->line.x1 = x1;
 	o->line.y1 = y1;
+	dx = x1 - x0;
+	dy = -(y1 - y0);
+	o->line.ao = fabs(atan(dy/dx));
+	o->line.ir = sqrt(dx*dx + dy*dy);
+	o->line.dx = dx;
+	o->line.dy = dy;
 }
 
-void setrect(Obj *o, int tx, int ty, int bx, int by)
+void setrect(Obj *o, int x, int y, int w, int h)
 {
 	o->type = ORECT;
-	o->rect.tx = tx;
-	o->rect.ty = ty;
-	o->rect.bx = bx;
-	o->rect.by = by;
+	o->rect.x = x;
+	o->rect.y = y;
+	o->rect.w = w;
+	o->rect.h = h;
 }
 
 void setcirc(Obj *o, int cx, int cy, int r)
@@ -222,40 +248,10 @@ void setcirc(Obj *o, int cx, int cy, int r)
 	o->circ.r = r;
 }
 
-void ctxtrs(Ctx *ctx, int ox, int oy)
+void rotline(Obj *o, double rad)
 {
-	int i;
-	Obj *p;
-
-	for(i = 0; i < NCTX; i++) {
-		p = ctx->o[i];
-		while(p != NULL) {
-			switch(p->type) {
-			case OLINE:
-				p->line.x0 += ox;
-				p->line.x1 += ox;
-				p->line.y0 += oy;
-				p->line.y1 += oy;
-				break;
-			case ORECT:
-				p->rect.tx += ox;
-				p->rect.bx += ox;
-				p->rect.ty += oy;
-				p->rect.by += oy;
-				break;
-			case OCIRC:
-				p->circ.cx += ox;
-				p->circ.cy += oy;
-				break;
-			default:
-				errorf("obj type unset");
-			}
-			p = p->link;
-		}
-	}
-}
-
-void clrast(void)
-{
-	memset(rast, 0, W*H*4);
+	if(o->type != OLINE)
+		errorf("bad type in rotline");
+	o->line.x1 = o->line.x0 + o->line.ir*cos(rad+o->line.ao);
+	o->line.y1 = o->line.y0 + o->line.ir*-sin(rad+o->line.ao);
 }
