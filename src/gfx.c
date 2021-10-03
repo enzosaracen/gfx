@@ -151,6 +151,14 @@ void putcirc(uint32 col, int cx, int cy, int r)
 	}
 }
 
+void addlist(Obj *o, Point *p)
+{
+	o->list.a[o->list.n].x = p->x;
+	o->list.a[o->list.n++].y = p->y;
+	if(o->list.n >= NLIST)
+		errorf("list too large");
+}
+
 Ctx *newctx(void)
 {
 	int i;
@@ -166,9 +174,19 @@ Ctx *newctx(void)
 	return ctx;
 }
 
+Point *newpt(double x, double y)
+{
+	Point *p;
+
+	p = emalloc(sizeof(Point));
+	p->x = x;
+	p->y = y;
+	return p;
+}
+
 void drawctx(Ctx *ctx)
 {
-	int i;
+	int i, j;
 	Obj *p;
 
 	csf = ctx->scale;
@@ -179,13 +197,17 @@ void drawctx(Ctx *ctx)
 		while(p != NULL) {
 			switch(p->type) {
 			case OLINE:
-				putline(p->col, p->line.x0, p->line.y0, p->line.x1, p->line.y1);
+				putline(p->col, p->line.p0->x, p->line.p0->y, p->line.p1->x, p->line.p1->y);
 				break;
 			case ORECT:
-				putrect(p->col, p->rect.x, p->rect.y, p->rect.w, p->rect.h);
+				putrect(p->col, p->rect.p->x, p->rect.p->y, p->rect.w, p->rect.h);
 				break;
 			case OCIRC:
-				putcirc(p->col, p->circ.cx, p->circ.cy, p->circ.r);
+				putcirc(p->col, p->circ.p->x, p->circ.p->y, p->circ.r);
+				break;
+			case OLIST:
+				for(j = 0; j < p->list.n; j++)
+					put(p->col, p->list.a[j].x, p->list.a[j].y);
 				break;
 			default:
 				errorf("obj type unset");
@@ -214,44 +236,41 @@ Obj *addobj(Ctx *ctx, uint32 col)
 	return o;
 }
 
-void setline(Obj *o, int x0, int y0, int x1, int y1)
+void setline(Obj *o, double x0, double y0, double x1, double y1)
 {
-	double dx, dy;
-
 	o->type = OLINE;
-	o->line.x0 = x0;
-	o->line.y0 = y0;
-	o->line.x1 = x1;
-	o->line.y1 = y1;
-	dx = x1 - x0;
-	dy = -(y1 - y0);
-	o->line.ao = fabs(atan(dy/dx));
-	o->line.ir = sqrt(dx*dx + dy*dy);
-	o->line.dx = dx;
-	o->line.dy = dy;
+	o->line.p0 = newpt(x0, y0);
+	o->line.p1 = newpt(x1, y1);
 }
 
-void setrect(Obj *o, int x, int y, int w, int h)
+void setrect(Obj *o, double x, double y, int w, int h)
 {
 	o->type = ORECT;
-	o->rect.x = x;
-	o->rect.y = y;
+	o->rect.p = newpt(x, y);
 	o->rect.w = w;
 	o->rect.h = h;
 }
 
-void setcirc(Obj *o, int cx, int cy, int r)
+void setcirc(Obj *o, double cx, double cy, int r)
 {
 	o->type = OCIRC;
-	o->circ.cx = cx;
-	o->circ.cy = cy;
+	o->circ.p = newpt(cx, cy);
 	o->circ.r = r;
 }
 
-void rotline(Obj *o, double rad)
+void setlist(Obj *o)
 {
-	if(o->type != OLINE)
-		errorf("bad type in rotline");
-	o->line.x1 = o->line.x0 + o->line.ir*cos(rad+o->line.ao);
-	o->line.y1 = o->line.y0 + o->line.ir*-sin(rad+o->line.ao);
+	o->type = OLIST;
+	o->list.n = 0;
+	o->list.a = emalloc(NLIST*sizeof(Point));
+}
+
+void rot(Point *p, Point *c, double rad)
+{
+	double rx, ry;
+
+	rx = p->x - c->x;
+	ry = c->y - p->y;
+	p->x = rx*cos(rad) - ry*sin(rad) + c->x;
+	p->y = -(rx*sin(rad) + ry*cos(rad)) + c->y;
 }

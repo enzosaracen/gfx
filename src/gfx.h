@@ -8,11 +8,14 @@
 #define W 		500
 #define H 		500
 #define NCTX		100
+#define NLIST		1000
+#define PI		M_PI
 
 typedef uint8_t		uint8;
 typedef uint32_t	uint32;
 typedef unsigned int	uint;
 
+typedef struct		Point Point;
 typedef struct		Obj Obj;
 typedef struct		Ctx Ctx;
 
@@ -20,6 +23,11 @@ enum {
 	OLINE,
 	ORECT,
 	OCIRC,
+	OLIST,
+};
+
+struct Point {
+	double x, y;
 };
 
 struct Obj {
@@ -30,15 +38,22 @@ struct Obj {
 	Ctx	*ctx;
 	union {
 		struct {
-			int x0, y0, x1, y1;
-			double ir, ao, dx, dy;
+			Point *p0, *p1;
 		} line;
 		struct {
-			int x, y, w, h;
+			Point *p;
+			int w, h;
 		} rect;
 		struct {
-			int cx, cy, r;
+			Point *p;
+			int r;
 		} circ;
+		struct {
+			/* temporary solution, could do faster stuff with blits
+			 * but dont know how to manage out-of-bound coords */
+			int n;
+			Point *a;
+		} list;
 	};
 };
 
@@ -60,10 +75,12 @@ uint32	rgb(uint8, uint8, uint8);
 void	putline(uint32, int, int, int, int);
 void	putrect(uint32, int, int, int, int);
 void	putcirc(uint32, int, int, int);
+void	addlist(Obj *, Point *);
 Ctx	*newctx(void);
 void	drawctx(Ctx *);
 Obj	*addobj(Ctx *, uint32);
-void	setline(Obj *, int, int, int, int);
-void	setrect(Obj *, int, int, int, int);
-void	setcirc(Obj *, int, int, int);
-void	rotline(Obj *, double);
+void	setline(Obj *, double, double, double, double);
+void	setrect(Obj *, double, double, int, int);
+void	setcirc(Obj *, double, double, int);
+void	setlist(Obj *);
+void	rot(Point *, Point *, double);
