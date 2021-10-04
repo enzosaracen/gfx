@@ -33,6 +33,7 @@ int main(void)
 	Ctx *ctx;
 	uint32 w;
 	Obj *p;
+	SDL_Event ev;
 	
 	init();
 	ctx = newctx();
@@ -43,8 +44,6 @@ int main(void)
 	setline(ship.lt = addobj(ctx, w), W/2-SBASE, H/2, W/2, H/2 - SHT);
 	setline(ship.rt = addobj(ctx, w), W/2+SBASE, H/2, W/2, H/2 - SHT);
 
-	drawctx(ctx);
-	SDL_Delay(1000);
 	for(i = 0; i < I; i++) {
 		g = 0;
 		for(j = 0; j < NCTX; j++) {
@@ -60,18 +59,14 @@ int main(void)
 		for(j = 0; j < g; j++)
 			setcirc(p = addobj(ctx, w), gen[j]->circ.p->x + (rand()%D - D/2), gen[j]->circ.p->y + (rand()%D - D/2), R);
 	}
-	for(i = 0; i < 100; i++) {
-		yaw(1);
-		drawctx(ctx);
-		clrast();
-		SDL_Delay(5);
+
+	while(SDL_PollEvent(&ev)) {
+		switch(ev.type) {
+			case SDL_QUIT:
+				SDL_Quit();
+				exit(0);
+			case SDL_KEYDOWN:
+				switch()
+		}
 	}
-	for(i = 0; i < 100; i++) {
-		yaw(-1);
-		drawctx(ctx);
-		clrast();
-		SDL_Delay(5);
-	}
-	SDL_Delay(2000);
-	SDL_Quit();
 }

@@ -26,6 +26,13 @@ enum {
 	OLIST,
 };
 
+enum {
+	KEYINACTIVE = 0,
+	KEYHELD = 1,
+	KEYDOWN,
+	KEYUP,
+};
+
 struct Point {
 	double x, y;
 };

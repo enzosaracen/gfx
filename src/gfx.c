@@ -4,6 +4,9 @@ SDL_Surface	*scr;
 uint8		rast[W*H*4];
 double		csf;
 int		xtr, ytr;
+int		nkeys;
+uint8		*prevks;
+int		*keys;
 
 void sdlerror(char *s)
 {
@@ -47,6 +50,8 @@ void init(void)
 	csf = 1;
 	xtr = 0;
 	ytr = 0;
+	SDL_GetKeyState(&nkeys);
+	keys = emalloc(nkeys*sizeof(*keys))
 }
 
 void draw(void)
@@ -262,7 +267,7 @@ void setlist(Obj *o)
 {
 	o->type = OLIST;
 	o->list.n = 0;
-	o->list.a = emalloc(NLIST*sizeof(Point));
+	o->list.a = emalloc(NLIST*sizeof(*o->list.a));
 }
 
 void rot(Point *p, Point *c, double rad)
@@ -273,4 +278,21 @@ void rot(Point *p, Point *c, double rad)
 	ry = c->y - p->y;
 	p->x = rx*cos(rad) - ry*sin(rad) + c->x;
 	p->y = -(rx*sin(rad) + ry*cos(rad)) + c->y;
+}
+
+void input(void)
+{
+	int i;
+	SDL_Event ev;
+	uint8 *ks;
+
+	while(SDL_PollEvent(&ev))
+		switch(ev.type) {
+		case SDL_QUIT:
+			SQL_Quit();
+			exit(0);
+		case SDL_KEYDOWN:
+			keys[]
+		}
+	
 }
