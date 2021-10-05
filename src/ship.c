@@ -7,24 +7,26 @@
 #define SBASE	8
 #define SHT	25
 #define YAW	0.05
+#define TICKMS	5
 
 Obj *gen[NGEN];
 
 struct {
 	Obj *base, *lt, *rt;
+	Point *cp;
 } ship;
 
 void yaw(int d)
 {
-	Point *c;
 	double r;
 
 	r = d*YAW;
-	c = ship.base->line.p0;
-	rot(ship.rt->line.p0, c, r);
-	rot(ship.rt->line.p1, c, r);
-	rot(ship.lt->line.p1, c, r);
-	rot(ship.base->line.p1, c, r);
+	rot(ship.rt->line.p0, ship.cp, r);
+	rot(ship.rt->line.p1, ship.cp, r);
+	rot(ship.lt->line.p0, ship.cp, r);
+	rot(ship.lt->line.p1, ship.cp, r);
+	rot(ship.base->line.p0, ship.cp, r);
+	rot(ship.base->line.p1, ship.cp, r);
 }
 
 int main(void)
@@ -33,17 +35,16 @@ int main(void)
 	Ctx *ctx;
 	uint32 w;
 	Obj *p;
-	SDL_Event ev;
 	
 	init();
 	ctx = newctx();
 	w = rgb(0xff, 0xff, 0xff);
 	srand(time(NULL));
 
+	ship.cp = newpt(W/2, H/2 - SHT/2);
 	setline(ship.base = addobj(ctx, w), W/2-SBASE, H/2, W/2+SBASE, H/2);
 	setline(ship.lt = addobj(ctx, w), W/2-SBASE, H/2, W/2, H/2 - SHT);
 	setline(ship.rt = addobj(ctx, w), W/2+SBASE, H/2, W/2, H/2 - SHT);
-
 	for(i = 0; i < I; i++) {
 		g = 0;
 		for(j = 0; j < NCTX; j++) {
@@ -59,14 +60,14 @@ int main(void)
 		for(j = 0; j < g; j++)
 			setcirc(p = addobj(ctx, w), gen[j]->circ.p->x + (rand()%D - D/2), gen[j]->circ.p->y + (rand()%D - D/2), R);
 	}
-
-	while(SDL_PollEvent(&ev)) {
-		switch(ev.type) {
-			case SDL_QUIT:
-				SDL_Quit();
-				exit(0);
-			case SDL_KEYDOWN:
-				switch()
-		}
+	while(1) {
+		input();
+		if(keyev[SDLK_a].state == KEYDOWN || keyev[SDLK_a].state == KEYHELD)
+			yaw(1);
+		if(keyev[SDLK_d].state == KEYDOWN || keyev[SDLK_d].state == KEYHELD)
+			yaw(-1);
+		drawctx(ctx);
+		clrast();
+		SDL_Delay(TICKMS);
 	}
 }

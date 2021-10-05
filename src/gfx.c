@@ -5,8 +5,6 @@ uint8		rast[W*H*4];
 double		csf;
 int		xtr, ytr;
 int		nkeys;
-uint8		*prevks;
-int		*keys;
 
 void sdlerror(char *s)
 {
@@ -51,7 +49,7 @@ void init(void)
 	xtr = 0;
 	ytr = 0;
 	SDL_GetKeyState(&nkeys);
-	keys = emalloc(nkeys*sizeof(*keys))
+	keyev = emalloc(nkeys*sizeof(*keyev));
 }
 
 void draw(void)
@@ -284,15 +282,27 @@ void input(void)
 {
 	int i;
 	SDL_Event ev;
-	uint8 *ks;
 
+	for(i = 0; i < nkeys; i++) {
+		if(keyev[i].state == KEYUP)
+			keyev[i].state = KEYINACTIVE;
+		if(keyev[i].state == KEYDOWN)
+			keyev[i].state = KEYHELD;
+		keyev[i].ndown = keyev[i].nup = 0;
+	}
 	while(SDL_PollEvent(&ev))
 		switch(ev.type) {
 		case SDL_QUIT:
-			SQL_Quit();
+			SDL_Quit();
 			exit(0);
+			break;
 		case SDL_KEYDOWN:
-			keys[]
+			keyev[ev.key.keysym.sym].state = KEYDOWN;
+			keyev[ev.key.keysym.sym].ndown++;
+			break;
+		case SDL_KEYUP:
+			keyev[ev.key.keysym.sym].state = KEYUP;
+			keyev[ev.key.keysym.sym].nup++;
+			break;
 		}
-	
 }

@@ -18,6 +18,7 @@ typedef unsigned int	uint;
 typedef struct		Point Point;
 typedef struct		Obj Obj;
 typedef struct		Ctx Ctx;
+typedef struct		Kevs Kevs;
 
 enum {
 	OLINE,
@@ -27,8 +28,8 @@ enum {
 };
 
 enum {
-	KEYINACTIVE = 0,
-	KEYHELD = 1,
+	KEYINACTIVE,
+	KEYHELD,
 	KEYDOWN,
 	KEYUP,
 };
@@ -72,6 +73,13 @@ struct Ctx {
 	int	xtr, ytr;
 };
 
+struct Kevs {
+	int state;
+	int ndown, nup;
+};
+
+Kevs	*keyev;
+
 void	errorf(char *, ...);
 void	*emalloc(size_t);
 void	init();
@@ -84,6 +92,7 @@ void	putrect(uint32, int, int, int, int);
 void	putcirc(uint32, int, int, int);
 void	addlist(Obj *, Point *);
 Ctx	*newctx(void);
+Point	*newpt(double, double);
 void	drawctx(Ctx *);
 Obj	*addobj(Ctx *, uint32);
 void	setline(Obj *, double, double, double, double);
@@ -91,3 +100,4 @@ void	setrect(Obj *, double, double, int, int);
 void	setcirc(Obj *, double, double, int);
 void	setlist(Obj *);
 void	rot(Point *, Point *, double);
+void	input(void);
