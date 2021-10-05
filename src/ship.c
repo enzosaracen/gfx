@@ -36,7 +36,7 @@ void yaw(int d)
 int main(void)
 {
 	int i, j, m;
-	Ctx *shipctx, *mapctx;
+	Ctx *shipctx, *mapctx, *ref;
 	uint32 w;
 	Obj *p, *seed;
 	
@@ -52,6 +52,8 @@ int main(void)
 	setline(ship.l = addobj(shipctx, w), W/2-SBASE, H/2, W/2, H/2 - SHT);
 	setline(ship.r = addobj(shipctx, w), W/2+SBASE, H/2, W/2, H/2 - SHT);
 
+	ref = newctx();
+	setcirc(seed = addobj(ref, w), W/2, H/2, R);
 	setcirc(seed = addobj(mapctx, w), W/2, H/2, R);
 	for(i = 0; i < I; i++) {
 		m = 0;
@@ -74,6 +76,7 @@ int main(void)
 	drawctx(mapctx);
 	drawctx(shipctx);
 	/* map drawing slows everything down, figure something out */
+	/* draw ctx on separate rasters (SDL_Scr) and then blit, so can choose not to redraw stuff, might help?  */
 	while(1) {
 		input();
 		if(keyev[SDLK_a].state == KEYDOWN || keyev[SDLK_a].state == KEYHELD) {
@@ -91,20 +94,22 @@ int main(void)
 		if(keyev[SDLK_w].state == KEYDOWN || keyev[SDLK_w].state == KEYHELD) {
 			shipctx->xtr += SPEED*cos(ship.ang);
 			shipctx->ytr += SPEED*-sin(ship.ang);
-			//vbx = shipctx->xtr;
-			//vby = shipctx->ytr;
+			vbx = shipctx->xtr;
+			vby = shipctx->ytr;
 			clrast();
 			//drawctx(mapctx);
 			drawctx(shipctx);
+			drawctx(ref);
 		}
 		if(keyev[SDLK_s].state == KEYDOWN || keyev[SDLK_s].state == KEYHELD) {
 			shipctx->xtr -= SPEED*cos(ship.ang);
 			shipctx->ytr -= SPEED*-sin(ship.ang);
-			//vbx = shipctx->xtr;
-			//vby = shipctx->ytr;
+			vbx = shipctx->xtr;
+			vby = shipctx->ytr;
 			clrast();
 			//drawctx(mapctx);
 			drawctx(shipctx);
+			drawctx(ref);
 		}
 		SDL_Delay(TICKMS);
 	}
