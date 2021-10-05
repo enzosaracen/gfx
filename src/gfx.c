@@ -46,8 +46,8 @@ void init(void)
 		sdlerror("SDL_SetVideoMode");
 	SDL_WM_SetCaption("gfx", "");
 	csf = 1;
-	xtr = 0;
-	ytr = 0;
+	xtr = ytr = ex = ey = 0;
+	vbx = vby = 0;
 	SDL_GetKeyState(&nkeys);
 	keyev = emalloc(nkeys*sizeof(*keyev));
 }
@@ -69,6 +69,8 @@ void put(uint32 col, int x, int y)
 	ex += xtr - (int)xtr;
 	y += ytr;
 	ey += ytr - (int)ytr;
+	x -= vbx;
+	y -= vby;
 	while(ex >= 1) {
 		x++;
 		ex--;
@@ -166,9 +168,9 @@ void putcirc(uint32 col, int cx, int cy, int r)
 
 void addlist(Obj *o, Point *p)
 {
-	o->list.a[o->list.n].x = p->x;
-	o->list.a[o->list.n++].y = p->y;
-	if(o->list.n >= NLIST)
+	o->a[o->n].x = p->x;
+	o->a[o->n++].y = p->y;
+	if(o->n >= NLIST)
 		errorf("list too large");
 }
 
@@ -200,7 +202,7 @@ Point *newpt(double x, double y)
 void drawctx(Ctx *ctx)
 {
 	int i, j;
-	Obj *p;
+	Obj *o;
 
 	csf = ctx->scale;
 	xtr = ctx->xtr;
@@ -208,26 +210,26 @@ void drawctx(Ctx *ctx)
 	ex = ctx->ex;
 	ey = ctx->ey;
 	for(i = 0; i < NCTX; i++) {
-		p = ctx->o[i];
-		while(p != NULL) {
-			switch(p->type) {
+		o = ctx->o[i];
+		while(o != NULL) {
+			switch(o->type) {
 			case OLINE:
-				putline(p->col, p->line.p0->x, p->line.p0->y, p->line.p1->x, p->line.p1->y);
+				putline(o->col, o->p0->x, o->p0->y, o->p1->x, o->p1->y);
 				break;
 			case ORECT:
-				putrect(p->col, p->rect.p->x, p->rect.p->y, p->rect.w, p->rect.h);
+				putrect(o->col, o->rp->x, o->rp->y, o->w, o->h);
 				break;
 			case OCIRC:
-				putcirc(p->col, p->circ.p->x, p->circ.p->y, p->circ.r);
+				putcirc(o->col, o->cp->x, o->cp->y, o->r);
 				break;
 			case OLIST:
-				for(j = 0; j < p->list.n; j++)
-					put(p->col, p->list.a[j].x, p->list.a[j].y);
+				for(j = 0; j < o->n; j++)
+					put(o->col, o->a[j].x, o->a[j].y);
 				break;
 			default:
 				errorf("obj type unset");
 			}
-			p = p->link;
+			o = o->link;
 		}
 	}
 	draw();
@@ -246,40 +248,64 @@ Obj *addobj(Ctx *ctx, uint32 col)
 	o->id = ctx->cid++;
 	o->col = col;
 	o->link = NULL;
+	o->back = NULL;
 
-	if((d = ctx->o[o->id % NCTX]) != NULL)
+	if((d = ctx->o[o->id % NCTX]) != NULL) {
+		d->back = o;
 		o->link = d;
+	}
 	ctx->o[o->id % NCTX] = o;
 	return o;
+}
+
+void remobj(Obj *o)
+{
+	o->back->link = o->link;
+	switch(o->type) {
+	case OLINE:
+		free(o->p0);
+		free(o->p1);
+		break;
+	case ORECT:
+		free(o->rp);
+		break;
+	case OCIRC:
+		free(o->cp);
+		break;
+	case OLIST:
+		free(o->a);
+		break;
+	}
+	free(o);
 }
 
 void setline(Obj *o, double x0, double y0, double x1, double y1)
 {
 	o->type = OLINE;
-	o->line.p0 = newpt(x0, y0);
-	o->line.p1 = newpt(x1, y1);
+	o->p0 = newpt(x0, y0);
+	o->p1 = newpt(x1, y1);
 }
 
 void setrect(Obj *o, double x, double y, int w, int h)
 {
 	o->type = ORECT;
-	o->rect.p = newpt(x, y);
-	o->rect.w = w;
-	o->rect.h = h;
+	o->rp = newpt(x, y);
+	o->w = w;
+	o->h = h;
 }
 
 void setcirc(Obj *o, double cx, double cy, int r)
 {
 	o->type = OCIRC;
-	o->circ.p = newpt(cx, cy);
-	o->circ.r = r;
+	o->cp = newpt(cx, cy);
+	o->r = r;
 }
 
 void setlist(Obj *o)
 {
 	o->type = OLIST;
-	o->list.n = 0;
-	o->list.a = emalloc(NLIST*sizeof(*o->list.a));
+	o->n = 0;
+	o->a = emalloc(NLIST*sizeof(*o->a));
 }
 
 void rot(Point *p, Point *c, double rad)

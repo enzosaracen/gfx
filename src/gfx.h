@@ -43,25 +43,26 @@ struct Obj {
 	int	type;
 	uint32	col;
 	Obj	*link;
+	Obj	*back;
 	Ctx	*ctx;
 	union {
 		struct {
 			Point *p0, *p1;
-		} line;
+		};
 		struct {
-			Point *p;
+			Point *rp;
 			int w, h;
-		} rect;
+		};
 		struct {
-			Point *p;
+			Point *cp;
 			int r;
-		} circ;
+		};
 		struct {
 			/* temporary solution, could do faster stuff with blits
 			 * but dont know how to manage out-of-bound coords */
 			int n;
 			Point *a;
-		} list;
+		};
 	};
 };
 
@@ -79,6 +80,7 @@ struct Kevs {
 };
 
 Kevs	*keyev;
+double	vbx, vby;
 
 void	errorf(char *, ...);
 void	*emalloc(size_t);
@@ -95,6 +97,7 @@ Ctx	*newctx(void);
 Point	*newpt(double, double);
 void	drawctx(Ctx *);
 Obj	*addobj(Ctx *, uint32);
+void	remobj(Obj *);
 void	setline(Obj *, double, double, double, double);
 void	setrect(Obj *, double, double, int, int);
 void	setcirc(Obj *, double, double, int);
