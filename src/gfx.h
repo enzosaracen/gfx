@@ -70,7 +70,7 @@ struct Ctx {
 	uint	cid;
 	Obj	**o;
 	double	scale;
-	int	xtr, ytr;
+	double	xtr, ytr, ex, ey;
 };
 
 struct Kevs {

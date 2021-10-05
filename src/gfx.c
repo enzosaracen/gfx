@@ -3,7 +3,7 @@
 SDL_Surface	*scr;
 uint8		rast[W*H*4];
 double		csf;
-int		xtr, ytr;
+double		xtr, ytr, ex, ey;
 int		nkeys;
 
 void sdlerror(char *s)
@@ -66,7 +66,17 @@ void put(uint32 col, int x, int y)
 	int i;
 
 	x += xtr;
+	ex += xtr - (int)xtr;
 	y += ytr;
+	ey += ytr - (int)ytr;
+	while(ex >= 1) {
+		x++;
+		ex--;
+	}
+	while(ey >= 1) {
+		y++;
+		ey--;
+	}
 	x = -csf*(W/2-x) + W/2;
 	y = -csf*(H/2-y) + H/2;
 	if(x >= W || x < 0 || y >= H || y < 0)
@@ -173,7 +183,7 @@ Ctx *newctx(void)
 		ctx->o[i] = NULL;
 	ctx->cid = 0;
 	ctx->scale = 1;
-	ctx->xtr = ctx->ytr = 0;
+	ctx->xtr = ctx->ytr = ctx->ex = ctx->ey = 0;
 	return ctx;
 }
 
@@ -195,6 +205,8 @@ void drawctx(Ctx *ctx)
 	csf = ctx->scale;
 	xtr = ctx->xtr;
 	ytr = ctx->ytr;
+	ex = ctx->ex;
+	ey = ctx->ey;
 	for(i = 0; i < NCTX; i++) {
 		p = ctx->o[i];
 		while(p != NULL) {
@@ -220,7 +232,9 @@ void drawctx(Ctx *ctx)
 	}
 	draw();
 	csf = 1;
-	xtr = ytr = 0;
+	ctx->ex = ex;
+	ctx->ey = ey;
+	xtr = ytr = ex = ey = 0;
 }
 
 Obj *addobj(Ctx *ctx, uint32 col)
