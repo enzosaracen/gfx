@@ -10,6 +10,7 @@
 #define NCTX		100
 #define NLIST		1000
 #define PI		M_PI
+#define VECINC		50
 
 typedef uint8_t		uint8;
 typedef uint32_t	uint32;
@@ -19,11 +20,13 @@ typedef struct		Point Point;
 typedef struct		Obj Obj;
 typedef struct		Ctx Ctx;
 typedef struct		Kevs Kevs;
+typedef struct		Pvec Pvec;
 
 enum {
 	OLINE,
 	ORECT,
 	OCIRC,
+	OTRI,
 	OLIST,
 };
 
@@ -32,6 +35,20 @@ enum {
 	KEYHELD,
 	KEYDOWN,
 	KEYUP,
+};
+
+enum {
+	TSF = 1<<0,
+	TRX = 1<<1,
+	TRY = 1<<2,
+	TVX = 1<<3,
+	TVY = 1<<4,
+};
+
+struct Pvec {
+	int n;
+	double *x, *y;
+	int max;
 };
 
 struct Point {
@@ -46,32 +63,34 @@ struct Obj {
 	Obj	*back;
 	Ctx	*ctx;
 	union {
-		struct {
+		struct {		/* line */
 			Point *p0, *p1;
 		};
-		struct {
+		struct {		/* rectangle */
 			Point *rp;
 			int w, h;
 		};
-		struct {
+		struct {		/* circle */
 			Point *cp;
 			int r;
 		};
-		struct {
-			/* temporary solution, could do faster stuff with blits
-			 * but dont know how to manage out-of-bound coords */
+		struct {		/* list */
 			int n;
 			Point *a;
+		};
+		struct {		/* triangle */
+			Point *t0, *t1, *t2;
 		};
 	};
 };
 
 /* wrap-around array of size NCTX, collisions handled using obj links */
 struct Ctx {
-	uint	cid;
-	Obj	**o;
-	double	scale;
-	double	xtr, ytr, ex, ey;
+	uint		cid;
+	Obj		**o;
+	double		scale, xtr, ytr, vbx, vby, rot;
+	Point		*rotcp;
+	Pvec		*pts;
 };
 
 struct Kevs {
@@ -80,27 +99,33 @@ struct Kevs {
 };
 
 Kevs	*keyev;
-double	vbx, vby;
 
 void	errorf(char *, ...);
 void	*emalloc(size_t);
+void	*erealloc(void *, size_t);
 void	init();
-void	draw();
-void	put(uint32, int, int);
+void	draw(int, ...);
+void	put(Ctx *, uint32, int, int);
+void	addpts(Pvec *, int, int);
 void	clrast(void);
 uint32	rgb(uint8, uint8, uint8);
-void	putline(uint32, int, int, int, int);
-void	putrect(uint32, int, int, int, int);
-void	putcirc(uint32, int, int, int);
+void	putline(Ctx *, uint32, int, int, int, int);
+void	putrect(Ctx *, uint32, int, int, int, int);
+void	putcirc(Ctx *, uint32, int, int, int);
+void	puttri(Ctx *, uint32, int, int, int, int, int, int);
 void	addlist(Obj *, Point *);
 Ctx	*newctx(void);
 Point	*newpt(double, double);
+void	trctx(Ctx *, int, double, double, double, double, double);
+void	rotctx(Ctx *, double, double, double);
 void	drawctx(Ctx *);
 Obj	*addobj(Ctx *, uint32);
 void	remobj(Obj *);
 void	setline(Obj *, double, double, double, double);
 void	setrect(Obj *, double, double, int, int);
 void	setcirc(Obj *, double, double, int);
+void	settri(Obj *, double, double, double, double, double, double);
 void	setlist(Obj *);
-void	rot(Point *, Point *, double);
+void	rot(double *, double *, double, double, double);
+void	rotp(Point *, Point *, double);
 void	input(void);

@@ -1,10 +1,8 @@
 #include "gfx.h"
 
+int		nkeys;
 SDL_Surface	*scr;
 uint8		rast[W*H*4];
-double		csf;
-double		xtr, ytr, ex, ey;
-int		nkeys;
 
 void sdlerror(char *s)
 {
@@ -36,6 +34,14 @@ void *emalloc(size_t n)
 	return p;
 }
 
+void *erealloc(void *p, size_t n)
+{
+	p = realloc(p, n);
+	if(p == NULL)
+		errorf("out of memory");
+	return p;
+}
+
 void init(void)
 {
 	if(SDL_Init(SDL_INIT_VIDEO) < 0)
@@ -45,15 +51,26 @@ void init(void)
 	if(scr == NULL)
 		sdlerror("SDL_SetVideoMode");
 	SDL_WM_SetCaption("gfx", "");
-	csf = 1;
-	xtr = ytr = ex = ey = 0;
-	vbx = vby = 0;
 	SDL_GetKeyState(&nkeys);
 	keyev = emalloc(nkeys*sizeof(*keyev));
 }
 
-void draw(void)
+void draw(int n, ...)
 {
+	int i, j, k;
+	va_list arg;
+	Ctx *ctx;
+
+	va_start(arg, n);
+	for(i = 0; i < n; i++) {
+		ctx = va_arg(arg, Ctx *);
+		for(j = 0; j < ctx->pts->n; j++) {
+			if(ctx->pts->y[j] >= H || ctx->pts->y[j] < 0 || ctx->pts->x[j] >= W || ctx->pts->x[j] < 0)
+				continue;
+			for(k = 0; k < 4; k++)
+				rast[((int)ctx->pts->y[j]*W + (int)ctx->pts->x[j])*4 + k] = 0xffffff>>i*8 & 0xff;
+		}
+	}
 	if(SDL_LockSurface(scr) < 0)
 		sdlerror("SDL_LockSurface");
 	memcpy((uint8*)scr->pixels, rast, W*H*4);
@@ -61,30 +78,20 @@ void draw(void)
 	SDL_UpdateRect(scr, 0, 0, 0, 0);
 }
 
-void put(uint32 col, int x, int y)
+void put(Ctx *ctx, uint32 col, int x, int y)
 {
-	int i;
+	addpts(ctx->pts, x, y);
+}
 
-	x += xtr;
-	ex += xtr - (int)xtr;
-	y += ytr;
-	ey += ytr - (int)ytr;
-	x -= vbx;
-	y -= vby;
-	while(ex >= 1) {
-		x++;
-		ex--;
+void addpts(Pvec *p, int x, int y)
+{
+	if(p->n >= p->max-1) {
+		p->max += VECINC;
+		p->x = erealloc(p->x, p->max*sizeof(double));
+		p->y = erealloc(p->y, p->max*sizeof(double));
 	}
-	while(ey >= 1) {
-		y++;
-		ey--;
-	}
-	x = -csf*(W/2-x) + W/2;
-	y = -csf*(H/2-y) + H/2;
-	if(x >= W || x < 0 || y >= H || y < 0)
-		return;
-	for(i = 0; i < 4; i++)
-		rast[(y*W + x)*4 + i] = col>>i*8 & 0xff;
+	p->x[p->n] = x;
+	p->y[p->n++] = y;
 }
 
 void clrast(void)
@@ -97,7 +104,7 @@ uint32 rgb(uint8 r, uint8 g, uint8 b)
 	return SDL_MapRGB(scr->format, r, g, b);
 }
 
-void putline(uint32 col, int x0, int y0, int x1, int y1)
+void putline(Ctx *ctx, uint32 col, int x0, int y0, int x1, int y1)
 {
 	int dx, dy, xi, yi, e, e2;
 
@@ -107,7 +114,7 @@ void putline(uint32 col, int x0, int y0, int x1, int y1)
 	yi = y0 < y1 ? 1 : -1;
 	e = dx + dy;
 	while(1) {
-		put(col, x0, y0);
+		put(ctx, col, x0, y0);
 		if(x0 == x1 && y0 == y1)
 			break;
 		e2 = 2*e;
@@ -122,48 +129,54 @@ void putline(uint32 col, int x0, int y0, int x1, int y1)
 	}
 }
 
-void putrect(uint32 col, int x, int y, int w, int h)
+void putrect(Ctx *ctx, uint32 col, int x, int y, int w, int h)
 {
 	int nx, ny;
 
 	nx = x + w;
 	ny = y + h;
-	putline(col, x, y, x, ny);
-	putline(col, x, ny, nx, ny);
-	putline(col, nx, ny, nx, y);
-	putline(col, nx, y, x, y);
+	putline(ctx, col, x, y, x, ny);
+	putline(ctx, col, x, ny, nx, ny);
+	putline(ctx, col, nx, ny, nx, y);
+	putline(ctx, col, nx, y, x, y);
 }
 
-void putcirc(uint32 col, int cx, int cy, int r)
+void putcirc(Ctx *ctx, uint32 col, int cx, int cy, int r)
 {
 	int x, y, r2;
 
 	r2 = r*r;
-	put(col, cx, cy+r);
-	put(col, cx, cy-r);
-	put(col, cx+r, cy);
-	put(col, cx-r, cy);
+	put(ctx, col, cx, cy+r);
+	put(ctx, col, cx, cy-r);
+	put(ctx, col, cx+r, cy);
+	put(ctx, col, cx-r, cy);
 
 	x = 1;
 	y = sqrt(r2 - 1) + 0.5;
 	while(x < y) {
-		put(col, cx+x, cy+y);
-		put(col, cx+x, cy-y);
-		put(col, cx-x, cy+y);
-		put(col, cx-x, cy-y);
-		put(col, cx+y, cy+x);
-		put(col, cx+y, cy-x);
-		put(col, cx-y, cy+x);
-		put(col, cx-y, cy-x);
+		put(ctx, col, cx+x, cy+y);
+		put(ctx, col, cx+x, cy-y);
+		put(ctx, col, cx-x, cy+y);
+		put(ctx, col, cx-x, cy-y);
+		put(ctx, col, cx+y, cy+x);
+		put(ctx, col, cx+y, cy-x);
+		put(ctx, col, cx-y, cy+x);
+		put(ctx, col, cx-y, cy-x);
 		x++;
 		y = sqrt(r2 - x*x) + 0.5;
 	}
 	if(x == y) {
-		put(col, cx+x, cy+y);
-		put(col, cx+x, cy-y);
-		put(col, cx-x, cy+y);
-		put(col, cx-x, cy-y);
+		put(ctx, col, cx+x, cy+y);
+		put(ctx, col, cx+x, cy-y);
+		put(ctx, col, cx-x, cy+y);
+		put(ctx, col, cx-x, cy-y);
 	}
+}
+
+void puttri(Ctx *ctx, uint32 col, int x0, int y0, int x1, int y1, int x2, int y2) {
+	putline(ctx, col, x0, y0, x1, y1);
+	putline(ctx, col, x1, y1, x2, y2);
+	putline(ctx, col, x2, y2, x0, y0);
 }
 
 void addlist(Obj *o, Point *p)
@@ -179,13 +192,16 @@ Ctx *newctx(void)
 	int i;
 	Ctx *ctx;
 
-	ctx = emalloc(sizeof(Ctx));
+	ctx = calloc(sizeof(Ctx), 1);
 	ctx->o = emalloc(NCTX*sizeof(Obj*));
 	for(i = 0; i < NCTX; i++)
 		ctx->o[i] = NULL;
-	ctx->cid = 0;
 	ctx->scale = 1;
-	ctx->xtr = ctx->ytr = ctx->ex = ctx->ey = 0;
+	ctx->pts = emalloc(sizeof(Pvec));
+	ctx->pts->n = 0;
+	ctx->pts->max = VECINC;
+	ctx->pts->x = emalloc(VECINC*sizeof(double));
+	ctx->pts->y = emalloc(VECINC*sizeof(double));
 	return ctx;
 }
 
@@ -199,44 +215,74 @@ Point *newpt(double x, double y)
 	return p;
 }
 
+void trctx(Ctx *ctx, int type, double sf, double xtr, double ytr, double vbx, double vby)
+{
+	int i;
+
+	if(type & TSF)
+		ctx->scale = sf/ctx->scale;
+	if(type & TRX)
+		ctx->xtr = xtr-ctx->xtr;
+	if(type & TRY)
+		ctx->ytr = ytr-ctx->ytr;
+	if(type & TVX)
+		ctx->vbx = vbx-ctx->vbx;
+	if(type & TVY)
+		ctx->vby = vby-ctx->vby;
+	for(i = 0; i < ctx->pts->n; i++) {
+		if(type & TSF) {
+			ctx->pts->x[i] = -ctx->scale*(W/2-ctx->pts->x[i]) + W/2;
+			ctx->pts->y[i] = -ctx->scale*(H/2-ctx->pts->y[i]) + H/2;
+		}
+		if(type & TRX)
+			ctx->pts->x[i] += ctx->xtr;
+		if(type & TVX)
+			ctx->pts->x[i] -= ctx->vbx;
+		if(type & TRY)
+			ctx->pts->y[i] += ctx->ytr;
+		if(type & TVY)
+			ctx->pts->y[i] -= ctx->vby;
+	}
+}
+
+void rotctx(Ctx *ctx, double cx, double cy, double rad)
+{
+	int i;
+
+	for(i = 0; i < ctx->pts->n; i++)
+		rot(&ctx->pts->x[i], &ctx->pts->y[i], cx, cy, rad);
+}
+
 void drawctx(Ctx *ctx)
 {
 	int i, j;
 	Obj *o;
 
-	csf = ctx->scale;
-	xtr = ctx->xtr;
-	ytr = ctx->ytr;
-	ex = ctx->ex;
-	ey = ctx->ey;
+	ctx->pts->n = 0;
 	for(i = 0; i < NCTX; i++) {
-		o = ctx->o[i];
-		while(o != NULL) {
+		for(o = ctx->o[i]; o != NULL; o = o->link) {
 			switch(o->type) {
 			case OLINE:
-				putline(o->col, o->p0->x, o->p0->y, o->p1->x, o->p1->y);
+				putline(ctx, o->col, o->p0->x, o->p0->y, o->p1->x, o->p1->y);
 				break;
 			case ORECT:
-				putrect(o->col, o->rp->x, o->rp->y, o->w, o->h);
+				putrect(ctx, o->col, o->rp->x, o->rp->y, o->w, o->h);
 				break;
 			case OCIRC:
-				putcirc(o->col, o->cp->x, o->cp->y, o->r);
+				putcirc(ctx, o->col, o->cp->x, o->cp->y, o->r);
+				break;
+			case OTRI:
+				puttri(ctx, o->col, o->t0->x, o->t0->y, o->t1->x, o->t1->y, o->t2->x, o->t2->y);
 				break;
 			case OLIST:
 				for(j = 0; j < o->n; j++)
-					put(o->col, o->a[j].x, o->a[j].y);
+					put(ctx, o->col, o->a[j].x, o->a[j].y);
 				break;
 			default:
 				errorf("obj type unset");
 			}
-			o = o->link;
 		}
 	}
-	draw();
-	csf = 1;
-	ctx->ex = ex;
-	ctx->ey = ey;
-	xtr = ytr = ex = ey = 0;
 }
 
 Obj *addobj(Ctx *ctx, uint32 col)
@@ -301,6 +347,14 @@ void setcirc(Obj *o, double cx, double cy, int r)
 	o->r = r;
 }
 
+void settri(Obj *o, double x0, double y0, double x1, double y1, double x2, double y2)
+{
+	o->type = OTRI;
+	o->t0 = newpt(x0, y0);
+	o->t1 = newpt(x1, y1);
+	o->t2 = newpt(x2, y2);
+}
+
 void setlist(Obj *o)
 {
 	o->type = OLIST;
@@ -308,7 +362,17 @@ void setlist(Obj *o)
 	o->a = emalloc(NLIST*sizeof(*o->a));
 }
 
-void rot(Point *p, Point *c, double rad)
+void rot(double *x, double *y, double cx, double cy, double rad)
+{
+	double rx, ry;
+
+	rx = *x - cx;
+	ry = cy - *y;
+	*x = rx*cos(rad) - ry*sin(rad) + cx;
+	*y = -(rx*sin(rad) + ry*cos(rad)) + cy;
+}
+
+void rotp(Point *p, Point *c, double rad)
 {
 	double rx, ry;
 
