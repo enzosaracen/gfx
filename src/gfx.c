@@ -57,30 +57,28 @@ void init(void)
 
 void draw(int n, ...)
 {
-	int i, j, k;
+	int i, j, k, l;
 	va_list arg;
 	Ctx *ctx;
+	Obj *o;
 
 	va_start(arg, n);
 	for(i = 0; i < n; i++) {
 		ctx = va_arg(arg, Ctx *);
-		for(j = 0; j < ctx->pts->n; j++) {
-			if(ctx->pts->y[j] >= H || ctx->pts->y[j] < 0 || ctx->pts->x[j] >= W || ctx->pts->x[j] < 0)
-				continue;
-			for(k = 0; k < 4; k++)
-				rast[((int)ctx->pts->y[j]*W + (int)ctx->pts->x[j])*4 + k] = 0xffffff>>i*8 & 0xff;
-		}
+		for(j = 0; j < NCTX; j++)
+			for(o = ctx->o[j]; o != NULL; o = o->link)
+				for(k = 0; k < o->pts->n; k++) {
+					if(o->pts->y[k] >= H || o->pts->y[k] < 0 || o->pts->x[k] >= W || o->pts->x[k] < 0)
+						continue;
+					for(l = 0; l < 4; l++)
+						rast[((int)o->pts->y[k]*W + (int)o->pts->x[k])*4 + l] = o->col>>i*8 & 0xff;
+				}
 	}
 	if(SDL_LockSurface(scr) < 0)
 		sdlerror("SDL_LockSurface");
 	memcpy((uint8*)scr->pixels, rast, W*H*4);
 	SDL_UnlockSurface(scr);
 	SDL_UpdateRect(scr, 0, 0, 0, 0);
-}
-
-void put(Ctx *ctx, uint32 col, int x, int y)
-{
-	addpts(ctx->pts, x, y);
 }
 
 void addpts(Pvec *p, int x, int y)
@@ -104,7 +102,7 @@ uint32 rgb(uint8 r, uint8 g, uint8 b)
 	return SDL_MapRGB(scr->format, r, g, b);
 }
 
-void putline(Ctx *ctx, uint32 col, int x0, int y0, int x1, int y1)
+void putline(Obj *o, int x0, int y0, int x1, int y1)
 {
 	int dx, dy, xi, yi, e, e2;
 
@@ -114,7 +112,7 @@ void putline(Ctx *ctx, uint32 col, int x0, int y0, int x1, int y1)
 	yi = y0 < y1 ? 1 : -1;
 	e = dx + dy;
 	while(1) {
-		put(ctx, col, x0, y0);
+		addpts(o->pts, x0, y0);
 		if(x0 == x1 && y0 == y1)
 			break;
 		e2 = 2*e;
@@ -129,54 +127,54 @@ void putline(Ctx *ctx, uint32 col, int x0, int y0, int x1, int y1)
 	}
 }
 
-void putrect(Ctx *ctx, uint32 col, int x, int y, int w, int h)
+void putrect(Obj *o, int x, int y, int w, int h)
 {
 	int nx, ny;
 
 	nx = x + w;
 	ny = y + h;
-	putline(ctx, col, x, y, x, ny);
-	putline(ctx, col, x, ny, nx, ny);
-	putline(ctx, col, nx, ny, nx, y);
-	putline(ctx, col, nx, y, x, y);
+	putline(o, x, y, x, ny);
+	putline(o, x, ny, nx, ny);
+	putline(o, nx, ny, nx, y);
+	putline(o, nx, y, x, y);
 }
 
-void putcirc(Ctx *ctx, uint32 col, int cx, int cy, int r)
+void putcirc(Obj *o, int cx, int cy, int r)
 {
 	int x, y, r2;
 
 	r2 = r*r;
-	put(ctx, col, cx, cy+r);
-	put(ctx, col, cx, cy-r);
-	put(ctx, col, cx+r, cy);
-	put(ctx, col, cx-r, cy);
+	addpts(o->pts, cx, cy+r);
+	addpts(o->pts, cx, cy-r);
+	addpts(o->pts, cx+r, cy);
+	addpts(o->pts, cx-r, cy);
 
 	x = 1;
 	y = sqrt(r2 - 1) + 0.5;
 	while(x < y) {
-		put(ctx, col, cx+x, cy+y);
-		put(ctx, col, cx+x, cy-y);
-		put(ctx, col, cx-x, cy+y);
-		put(ctx, col, cx-x, cy-y);
-		put(ctx, col, cx+y, cy+x);
-		put(ctx, col, cx+y, cy-x);
-		put(ctx, col, cx-y, cy+x);
-		put(ctx, col, cx-y, cy-x);
+		addpts(o->pts, cx+x, cy+y);
+		addpts(o->pts, cx+x, cy-y);
+		addpts(o->pts, cx-x, cy+y);
+		addpts(o->pts, cx-x, cy-y);
+		addpts(o->pts, cx+y, cy+x);
+		addpts(o->pts, cx+y, cy-x);
+		addpts(o->pts, cx-y, cy+x);
+		addpts(o->pts, cx-y, cy-x);
 		x++;
 		y = sqrt(r2 - x*x) + 0.5;
 	}
 	if(x == y) {
-		put(ctx, col, cx+x, cy+y);
-		put(ctx, col, cx+x, cy-y);
-		put(ctx, col, cx-x, cy+y);
-		put(ctx, col, cx-x, cy-y);
+		addpts(o->pts, cx+x, cy+y);
+		addpts(o->pts, cx+x, cy-y);
+		addpts(o->pts, cx-x, cy+y);
+		addpts(o->pts, cx-x, cy-y);
 	}
 }
 
-void puttri(Ctx *ctx, uint32 col, int x0, int y0, int x1, int y1, int x2, int y2) {
-	putline(ctx, col, x0, y0, x1, y1);
-	putline(ctx, col, x1, y1, x2, y2);
-	putline(ctx, col, x2, y2, x0, y0);
+void puttri(Obj *o, int x0, int y0, int x1, int y1, int x2, int y2) {
+	putline(o, x0, y0, x1, y1);
+	putline(o, x1, y1, x2, y2);
+	putline(o, x2, y2, x0, y0);
 }
 
 void addlist(Obj *o, Point *p)
@@ -197,11 +195,6 @@ Ctx *newctx(void)
 	for(i = 0; i < NCTX; i++)
 		ctx->o[i] = NULL;
 	ctx->scale = 1;
-	ctx->pts = emalloc(sizeof(Pvec));
-	ctx->pts->n = 0;
-	ctx->pts->max = VECINC;
-	ctx->pts->x = emalloc(VECINC*sizeof(double));
-	ctx->pts->y = emalloc(VECINC*sizeof(double));
 	return ctx;
 }
 
@@ -217,7 +210,8 @@ Point *newpt(double x, double y)
 
 void trctx(Ctx *ctx, int type, double sf, double xtr, double ytr, double vbx, double vby)
 {
-	int i;
+	int i, j;
+	Obj *o;
 
 	if(type & TSF)
 		ctx->scale = sf/ctx->scale;
@@ -229,28 +223,54 @@ void trctx(Ctx *ctx, int type, double sf, double xtr, double ytr, double vbx, do
 		ctx->vbx = vbx-ctx->vbx;
 	if(type & TVY)
 		ctx->vby = vby-ctx->vby;
-	for(i = 0; i < ctx->pts->n; i++) {
-		if(type & TSF) {
-			ctx->pts->x[i] = -ctx->scale*(W/2-ctx->pts->x[i]) + W/2;
-			ctx->pts->y[i] = -ctx->scale*(H/2-ctx->pts->y[i]) + H/2;
+	for(i = 0; i < NCTX; i++) {
+		for(o = ctx->o[i]; o != NULL; o = o->link) {
+			for(j = 0; j < o->pts->n; j++) {
+				if(type & TSF) {
+					o->pts->x[j] = -ctx->scale*(W/2-o->pts->x[j]) + W/2;
+					o->pts->y[j] = -ctx->scale*(H/2-o->pts->y[j]) + H/2;
+				}
+				if(type & TRX)
+					o->pts->x[j] += ctx->xtr;
+				if(type & TVX)
+					o->pts->x[j] -= ctx->vbx;
+				if(type & TRY)
+					o->pts->y[j] += ctx->ytr;
+				if(type & TVY)
+					o->pts->y[j] -= ctx->vby;
+			}
 		}
-		if(type & TRX)
-			ctx->pts->x[i] += ctx->xtr;
-		if(type & TVX)
-			ctx->pts->x[i] -= ctx->vbx;
-		if(type & TRY)
-			ctx->pts->y[i] += ctx->ytr;
-		if(type & TVY)
-			ctx->pts->y[i] -= ctx->vby;
 	}
 }
 
-void rotctx(Ctx *ctx, double cx, double cy, double rad)
+/* note that if transforming objects separate from context, future context transformations
+ * will be disproportionate unless accounted for; also transformations are done one-off here */
+void trobj(Obj *o, int type, double sf, double xtr, double ytr, double vbx, double vby)
 {
 	int i;
 
-	for(i = 0; i < ctx->pts->n; i++)
-		rot(&ctx->pts->x[i], &ctx->pts->y[i], cx, cy, rad);
+	for(i = 0; i < o->pts->n; i++) {
+		if(type & TSF) {
+			o->pts->x[i] = -sf*(W/2-o->pts->x[i]) + W/2;
+			o->pts->y[i] = -sf*(H/2-o->pts->y[i]) + H/2;
+		}
+		if(type & TRX)
+			o->pts->x[i] += xtr;
+		if(type & TVX)
+			o->pts->x[i] -= vbx;
+		if(type & TRY)
+			o->pts->y[i] += ytr;
+		if(type & TVY)
+			o->pts->y[i] -= vby;
+	}
+}
+
+void rotobj(Obj *o, double cx, double cy, double rad)
+{
+	int i;
+
+	for(i = 0; i < o->pts->n; i++)
+		rot(&o->pts->x[i], &o->pts->y[i], cx, cy, rad);
 }
 
 void drawctx(Ctx *ctx)
@@ -258,30 +278,57 @@ void drawctx(Ctx *ctx)
 	int i, j;
 	Obj *o;
 
-	ctx->pts->n = 0;
 	for(i = 0; i < NCTX; i++) {
 		for(o = ctx->o[i]; o != NULL; o = o->link) {
+			o->pts->n = 0;
 			switch(o->type) {
 			case OLINE:
-				putline(ctx, o->col, o->p0->x, o->p0->y, o->p1->x, o->p1->y);
+				putline(o, o->p0->x, o->p0->y, o->p1->x, o->p1->y);
 				break;
 			case ORECT:
-				putrect(ctx, o->col, o->rp->x, o->rp->y, o->w, o->h);
+				putrect(o, o->rp->x, o->rp->y, o->w, o->h);
 				break;
 			case OCIRC:
-				putcirc(ctx, o->col, o->cp->x, o->cp->y, o->r);
+				putcirc(o, o->cp->x, o->cp->y, o->r);
 				break;
 			case OTRI:
-				puttri(ctx, o->col, o->t0->x, o->t0->y, o->t1->x, o->t1->y, o->t2->x, o->t2->y);
+				puttri(o, o->t0->x, o->t0->y, o->t1->x, o->t1->y, o->t2->x, o->t2->y);
 				break;
 			case OLIST:
 				for(j = 0; j < o->n; j++)
-					put(ctx, o->col, o->a[j].x, o->a[j].y);
+					addpts(o->pts, o->a[j].x, o->a[j].y);
 				break;
 			default:
-				errorf("obj type unset");
+				errorf("bad obj type in drawctx");
 			}
 		}
+	}
+}
+
+void drawobj(Obj *o)
+{
+	int i;
+
+	o->pts->n = 0;
+	switch(o->type) {
+	case OLINE:
+		putline(o, o->p0->x, o->p0->y, o->p1->x, o->p1->y);
+		break;
+	case ORECT:
+		putrect(o, o->rp->x, o->rp->y, o->w, o->h);
+		break;
+	case OCIRC:			
+		putcirc(o, o->cp->x, o->cp->y, o->r);
+		break;
+	case OTRI:
+		puttri(o, o->t0->x, o->t0->y, o->t1->x, o->t1->y, o->t2->x, o->t2->y);
+		break;
+	case OLIST:
+		for(i = 0; i < o->n; i++)
+			addpts(o->pts, o->a[i].x, o->a[i].y);
+		break;
+	default:
+		errorf("bad obj type in drawobj");
 	}
 }
 
@@ -295,6 +342,11 @@ Obj *addobj(Ctx *ctx, uint32 col)
 	o->col = col;
 	o->link = NULL;
 	o->back = NULL;
+	o->pts = emalloc(sizeof(Pvec));
+	o->pts->n = 0;
+	o->pts->max = VECINC;
+	o->pts->x = emalloc(VECINC*sizeof(double));
+	o->pts->y = emalloc(VECINC*sizeof(double));
 
 	if((d = ctx->o[o->id % NCTX]) != NULL) {
 		d->back = o;
@@ -306,7 +358,15 @@ Obj *addobj(Ctx *ctx, uint32 col)
 
 void remobj(Obj *o)
 {
-	o->back->link = o->link;
+	if(o->back != NULL)
+		o->back->link = o->link;
+	if(o->link != NULL)
+		o->link->back = o->back;
+	if(o->back == NULL)
+		o->ctx->o[o->id % NCTX] = o->link;
+	free(o->pts->x);
+	free(o->pts->y);
+	free(o->pts);
 	switch(o->type) {
 	case OLINE:
 		free(o->p0);
@@ -318,9 +378,16 @@ void remobj(Obj *o)
 	case OCIRC:
 		free(o->cp);
 		break;
+	case OTRI:
+		free(o->t0);
+		free(o->t1);
+		free(o->t2);
+		break;
 	case OLIST:
 		free(o->a);
 		break;
+	default:
+		errorf("bad obj type in remobj");
 	}
 	free(o);
 }

@@ -1,5 +1,5 @@
 CC	= gcc
-CFLAGS	= -Wall -Wextra -g -lm $(shell sdl-config --cflags --libs)
+CFLAGS	= -Wall -Wextra -ggdb3 -lm $(shell sdl-config --cflags --libs)
 OBJ	= src/gfx.o \
 	  src/ship.o
 

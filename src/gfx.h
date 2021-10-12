@@ -62,6 +62,7 @@ struct Obj {
 	Obj	*link;
 	Obj	*back;
 	Ctx	*ctx;
+	Pvec	*pts;
 	union {
 		struct {		/* line */
 			Point *p0, *p1;
@@ -89,8 +90,6 @@ struct Ctx {
 	uint		cid;
 	Obj		**o;
 	double		scale, xtr, ytr, vbx, vby, rot;
-	Point		*rotcp;
-	Pvec		*pts;
 };
 
 struct Kevs {
@@ -105,20 +104,21 @@ void	*emalloc(size_t);
 void	*erealloc(void *, size_t);
 void	init();
 void	draw(int, ...);
-void	put(Ctx *, uint32, int, int);
 void	addpts(Pvec *, int, int);
 void	clrast(void);
 uint32	rgb(uint8, uint8, uint8);
-void	putline(Ctx *, uint32, int, int, int, int);
-void	putrect(Ctx *, uint32, int, int, int, int);
-void	putcirc(Ctx *, uint32, int, int, int);
-void	puttri(Ctx *, uint32, int, int, int, int, int, int);
+void	putline(Obj *, int, int, int, int);
+void	putrect(Obj *, int, int, int, int);
+void	putcirc(Obj *, int, int, int);
+void	puttri(Obj *, int, int, int, int, int, int);
 void	addlist(Obj *, Point *);
 Ctx	*newctx(void);
 Point	*newpt(double, double);
 void	trctx(Ctx *, int, double, double, double, double, double);
-void	rotctx(Ctx *, double, double, double);
+void	trobj(Obj *, int, double, double, double, double, double);
+void	rotobj(Obj *, double, double, double);
 void	drawctx(Ctx *);
+void	drawobj(Obj *);
 Obj	*addobj(Ctx *, uint32);
 void	remobj(Obj *);
 void	setline(Obj *, double, double, double, double);

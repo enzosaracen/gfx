@@ -1,17 +1,29 @@
 #include "gfx.h"
 
-#define R	25
-#define D	100000
-#define I	100
 #define NMAP	100
+#define TICKMS	20
 #define SBASE	8
 #define SHT	25
+#define BLHT	10
+#define BLDUR	1000/TICKMS
 #define YAW	0.05
-#define TICKMS	20
 #define SPEED	4
 #define ROTSP	2.25
+#define BLTSP	10
+#define SCD	10
+#define NBLT	BLDUR/SCD
 
-Obj *map[NMAP];
+typedef struct Bullet Bullet;
+
+struct Bullet {
+	Obj *o;
+	int t;
+	double ang;
+};
+
+uint32	w;
+Bullet	blt[NBLT];
+Ctx	*bltctx;
 
 struct {
 	Obj *o;
@@ -26,21 +38,24 @@ void yaw(int d)
 
 	r = d*YAW;
 	ship.ang += r;
-	rotctx(ship.ctx, ship.cp->x, ship.cp->y, r);
+	rotobj(ship.o, ship.cp->x, ship.cp->y, r);
 }
 
-int main(void)
+void thrust(int d)
 {
-	int i, j, m;
-	Ctx *mapctx, *ref;
-	uint32 w;
-	Obj *p, *seed;
 	double xtr, ytr;
-	int lt, ct, et, fps, cev;
-	
+
+	xtr = ship.ctx->xtr + d*cos(ship.ang);
+	ytr = ship.ctx->ytr + d*-sin(ship.ang);
+	trctx(ship.ctx, TRX|TRY|TVX|TVY, 0, xtr, ytr, xtr, ytr);
+	trctx(bltctx, TVX|TVY, 0, 0, 0, xtr, ytr);
+}
+
+void ginit(void)
+{
 	init();
-	mapctx = newctx();
 	ship.ctx = newctx();
+	bltctx = newctx();
 	w = rgb(0xff, 0xff, 0xff);
 	srand(time(NULL));
 
@@ -48,35 +63,35 @@ int main(void)
 	ship.cp = newpt(W/2, H/2 - SHT/2);
 	settri(ship.o = addobj(ship.ctx, w), W/2-SBASE, H/2, W/2+SBASE, H/2, W/2, H/2-SHT);
 
-	ref = newctx();
-	setcirc(addobj(ref, w), W/2, H/2, R);
-	setcirc(seed = addobj(mapctx, w), W/2, H/2, R);
-	for(i = 0; i < I; i++) {
-		m = 0;
-		for(j = 0; j < NCTX; j++) {
-			p = mapctx->o[j];
-			while(p != NULL && m < NMAP-1) {
-				if(p->type == OCIRC || p->type == OLINE)
-					map[m++] = p;
-				p = p->link;
-			}
-			if(m >= NMAP-1)
-				break;
-		}
-		for(j = 0; j < m; j++)
-			setcirc(p = addobj(mapctx, w), map[j]->cp->x + (rand()%D - D/2), map[j]->cp->y + (rand()%D - D/2), R);
-	}
-	remobj(seed);
-
-	drawctx(mapctx);
-	drawctx(ref);
 	drawctx(ship.ctx);
-	trctx(mapctx, TSF, 0.2, 0, 0, 0, 0);
-	draw(3, ship.ctx, mapctx, ref);
-	et = fps = 0;
+	draw(1, ship.ctx);
+}
+
+int main(void)
+{
+	int i, j;
+	int lt, ct, et, fps, cev, scd, iblt, nblt;
+
+	ginit();
+	et = fps = scd = iblt = nblt = 0;
 	for(i = 0;;) {
 		lt = SDL_GetTicks();
 		input();
+		if(scd > 0)
+			scd--;
+		for(j = 0; j < NBLT; j++) {
+			if(blt[j].o != NULL) {
+				if(++blt[j].t >= BLDUR) {
+					remobj(blt[j].o);
+					blt[j].o = NULL;
+					if(iblt == -1)
+						iblt = j;
+					nblt--;
+				} else
+					trobj(blt[j].o, TRX|TRY, 0, BLTSP*cos(blt[j].ang), BLTSP*-sin(blt[j].ang), 0, 0);
+			} else if(iblt == -1)
+				iblt = j;
+		}
 		if(keyev[SDLK_a].state == KEYDOWN || keyev[SDLK_a].state == KEYHELD) {
 			yaw(ROTSP);
 			cev = 1;
@@ -86,27 +101,31 @@ int main(void)
 			cev = 1;
 		}
 		if(keyev[SDLK_w].state == KEYDOWN || keyev[SDLK_w].state == KEYHELD) {
-			xtr = ship.ctx->xtr + SPEED*cos(ship.ang);
-			ytr = ship.ctx->ytr + SPEED*-sin(ship.ang);
-			trctx(ship.ctx, TRX|TRY|TVX|TVY, 0, xtr, ytr, xtr, ytr);
-			trctx(ref, TVX|TVY, 0, 0, 0, xtr, ytr);
-			trctx(mapctx, TVX|TVY, 0, 0, 0, xtr, ytr);
+			thrust(SPEED);
 			cev = 1;
 		}
 		if(keyev[SDLK_s].state == KEYDOWN || keyev[SDLK_s].state == KEYHELD) {
-			xtr = ship.ctx->xtr - SPEED*cos(ship.ang);
-			ytr = ship.ctx->ytr - SPEED*-sin(ship.ang);
-			trctx(ship.ctx, TRX|TRY|TVX|TVY, 0, xtr, ytr, xtr, ytr);
-			trctx(ref, TVX|TVY, 0, 0, 0, xtr, ytr);
-			trctx(mapctx, TVX|TVY, 0, 0, 0, xtr, ytr);
+			thrust(-SPEED);
+			cev = 1;
+		}
+		if(scd == 0 && (keyev[SDLK_SPACE].state == KEYDOWN || keyev[SDLK_SPACE].state == KEYHELD)) {
+			if(iblt == -1)
+				errorf("bullet count shouldn't be greater than NBLT");
+			blt[iblt].ang = ship.ang;
+			blt[iblt].t = 0;
+			setline(blt[iblt].o = addobj(bltctx, w), ship.cp->x, ship.cp->y, ship.cp->x, ship.cp->y-SHT/2);
+			rotp(blt[iblt].o->p1, blt[iblt].o->p0, blt[iblt].ang-PI/2);
+			drawobj(blt[iblt].o);
+			iblt = -1;
+			nblt++;
+			scd = SCD;
 			cev = 1;
 		}
 		if(!et) {
 			fps++;
-			if(cev) {
-				draw(3, ship.ctx, mapctx, ref);
-				clrast();
-			}
+			if(cev || nblt > 0)
+				draw(2, ship.ctx, bltctx);
+			clrast();
 		}
 		ct = SDL_GetTicks();
 		if(et) {
