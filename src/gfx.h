@@ -11,6 +11,7 @@
 #define NLIST		1000
 #define PI		M_PI
 #define VECINC		50
+#define REMINC		50
 
 typedef uint8_t		uint8;
 typedef uint32_t	uint32;
@@ -48,6 +49,8 @@ enum {
 struct Pvec {
 	int n;
 	double *x, *y;
+	/* indices in rem will be ignored */
+	int *rem;
 	int max;
 };
 
@@ -101,10 +104,12 @@ Kevs	*keyev;
 
 void	errorf(char *, ...);
 void	*emalloc(size_t);
+void	*ecalloc(size_t, size_t);
 void	*erealloc(void *, size_t);
 void	init();
 void	draw(int, ...);
 void	addpts(Pvec *, int, int);
+void	rempts(Pvec *, int);
 void	clrast(void);
 uint32	rgb(uint8, uint8, uint8);
 void	putline(Obj *, int, int, int, int);
@@ -114,8 +119,10 @@ void	puttri(Obj *, int, int, int, int, int, int);
 void	addlist(Obj *, Point *);
 Ctx	*newctx(void);
 Point	*newpt(double, double);
+Point	*adjpt(Ctx *, Point *);
 void	trctx(Ctx *, int, double, double, double, double, double);
 void	trobj(Obj *, int, double, double, double, double, double);
+void	adjobj(Obj *, double, double, double);
 void	rotobj(Obj *, double, double, double);
 void	drawctx(Ctx *);
 void	drawobj(Obj *);

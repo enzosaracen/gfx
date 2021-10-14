@@ -34,6 +34,16 @@ void *emalloc(size_t n)
 	return p;
 }
 
+void *ecalloc(size_t n, size_t s)
+{
+	void *p;
+
+	p = calloc(n, s);
+	if(p == NULL)
+		errorf("out of memory");
+	return p;
+}
+
 void *erealloc(void *p, size_t n)
 {
 	p = realloc(p, n);
@@ -68,7 +78,7 @@ void draw(int n, ...)
 		for(j = 0; j < NCTX; j++)
 			for(o = ctx->o[j]; o != NULL; o = o->link)
 				for(k = 0; k < o->pts->n; k++) {
-					if(o->pts->y[k] >= H || o->pts->y[k] < 0 || o->pts->x[k] >= W || o->pts->x[k] < 0)
+					if(o->pts->y[k] >= H || o->pts->y[k] < 0 || o->pts->x[k] >= W || o->pts->x[k] < 0 || o->pts->rem[k])
 						continue;
 					for(l = 0; l < 4; l++)
 						rast[((int)o->pts->y[k]*W + (int)o->pts->x[k])*4 + l] = o->col>>i*8 & 0xff;
@@ -83,13 +93,24 @@ void draw(int n, ...)
 
 void addpts(Pvec *p, int x, int y)
 {
+	int i;
+
 	if(p->n >= p->max-1) {
 		p->max += VECINC;
 		p->x = erealloc(p->x, p->max*sizeof(double));
 		p->y = erealloc(p->y, p->max*sizeof(double));
+		p->rem = erealloc(p->rem, p->max*sizeof(int));
+		for(i = 0; i < p->max; i++)
+			p->rem[i] = 0;
 	}
 	p->x[p->n] = x;
 	p->y[p->n++] = y;
+}
+
+void rempts(Pvec *p, int i)
+{
+	if(i < p->n)
+		p->rem[i] = 1;
 }
 
 void clrast(void)
@@ -190,7 +211,7 @@ Ctx *newctx(void)
 	int i;
 	Ctx *ctx;
 
-	ctx = calloc(sizeof(Ctx), 1);
+	ctx = ecalloc(sizeof(Ctx), 1);
 	ctx->o = emalloc(NCTX*sizeof(Obj*));
 	for(i = 0; i < NCTX; i++)
 		ctx->o[i] = NULL;
@@ -211,57 +232,116 @@ Point *newpt(double x, double y)
 void trctx(Ctx *ctx, int type, double sf, double xtr, double ytr, double vbx, double vby)
 {
 	int i, j;
+	double x, y, s;
 	Obj *o;
 
-	if(type & TSF)
-		ctx->scale = sf/ctx->scale;
-	if(type & TRX)
+	s = 1;
+	x = y = 0;
+	if(type & TSF) {
+		s = sf/ctx->scale;
+		ctx->scale = sf;
+	}
+	if(type & TRX) {
 		ctx->xtr = xtr-ctx->xtr;
-	if(type & TRY)
+		x += ctx->xtr;
+	}
+	if(type & TRY) {
 		ctx->ytr = ytr-ctx->ytr;
-	if(type & TVX)
+		y += ctx->ytr;
+	}
+	if(type & TVX) {
 		ctx->vbx = vbx-ctx->vbx;
-	if(type & TVY)
+		x -= ctx->vbx;
+	}
+	if(type & TVY) {
 		ctx->vby = vby-ctx->vby;
+		y -= ctx->vby;
+	}
 	for(i = 0; i < NCTX; i++) {
 		for(o = ctx->o[i]; o != NULL; o = o->link) {
 			for(j = 0; j < o->pts->n; j++) {
+				o->pts->x[j] += x;
+				o->pts->y[j] += y;
 				if(type & TSF) {
-					o->pts->x[j] = -ctx->scale*(W/2-o->pts->x[j]) + W/2;
-					o->pts->y[j] = -ctx->scale*(H/2-o->pts->y[j]) + H/2;
+					o->pts->x[j] = s*(W/2-o->pts->x[j]) + W/2;
+					o->pts->y[j] = s*(H/2-o->pts->y[j]) + H/2;
 				}
-				if(type & TRX)
-					o->pts->x[j] += ctx->xtr;
-				if(type & TVX)
-					o->pts->x[j] -= ctx->vbx;
-				if(type & TRY)
-					o->pts->y[j] += ctx->ytr;
-				if(type & TVY)
-					o->pts->y[j] -= ctx->vby;
 			}
+			adjobj(o, x, y, s);
 		}
 	}
 }
 
 /* note that if transforming objects separate from context, future context transformations
- * will be disproportionate unless accounted for; also transformations are done one-off here */
+ * will be disproportionate because transformations are done one-off here */
 void trobj(Obj *o, int type, double sf, double xtr, double ytr, double vbx, double vby)
 {
 	int i;
+	double x, y, s;
 
+	s = 1;
+	x = y = 0;
+	if(type & TRX)
+		x += xtr;
+	if(type & TRY)
+		y += ytr;
+	if(type & TVX)
+		x -= vbx;
+	if(type & TVY)
+		y -= vby;
+	if(type & TSF)
+		s = sf;
 	for(i = 0; i < o->pts->n; i++) {
+		o->pts->x[i] += x;
+		o->pts->y[i] += y;
 		if(type & TSF) {
-			o->pts->x[i] = -sf*(W/2-o->pts->x[i]) + W/2;
-			o->pts->y[i] = -sf*(H/2-o->pts->y[i]) + H/2;
+			o->pts->x[i] = -s*(W/2-o->pts->x[i]) + W/2;
+			o->pts->y[i] = -s*(H/2-o->pts->y[i]) + H/2;
 		}
-		if(type & TRX)
-			o->pts->x[i] += xtr;
-		if(type & TVX)
-			o->pts->x[i] -= vbx;
-		if(type & TRY)
-			o->pts->y[i] += ytr;
-		if(type & TVY)
-			o->pts->y[i] -= vby;
+	}
+	adjobj(o, x, y, s);
+}
+
+void adjobj(Obj *o, double x, double y, double s)
+{
+	#define tr(p) { \
+		p->x += x; \
+		p->y += y; \
+		if(s != 1) { \
+			p->x = s*(W/2-p->x) + W/2; \
+			p->y = s*(H/2-p->y) + H/2; \
+		} \
+	}
+
+	switch(o->type) {
+	case OLINE:
+		tr(o->p0);
+		tr(o->p1);
+		break;
+	case ORECT:
+		tr(o->rp);
+		if(s != 1) {
+			o->w *= s;
+			o->h *= s;
+		}
+		break;
+	case OCIRC:
+		tr(o->cp);
+		if(s != 1)
+			o->r *= s;
+		break;
+	case OTRI:
+		tr(o->t0);
+		tr(o->t1);
+		tr(o->t2);
+		break;
+
+	/* do nothing currently, probably should rework lists because already represented in pts,
+	 * make one time operation when drawing obj to add points and then don't modify actual obj stuff */
+	case OLIST:
+		break;
+	default:
+		errorf("bad type in adjobj");
 	}
 }
 
@@ -347,6 +427,7 @@ Obj *addobj(Ctx *ctx, uint32 col)
 	o->pts->max = VECINC;
 	o->pts->x = emalloc(VECINC*sizeof(double));
 	o->pts->y = emalloc(VECINC*sizeof(double));
+	o->pts->rem = ecalloc(REMINC, sizeof(int));
 
 	if((d = ctx->o[o->id % NCTX]) != NULL) {
 		d->back = o;
