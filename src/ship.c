@@ -18,6 +18,8 @@
 #define FIZDUR	1000/TICKMS
 #define FIZVAR	10
 #define FIZDEC	10
+#define SHBW	SBASE*0.75
+#define SHBH	SHT*0.75
 
 typedef struct Bullet Bullet;
 typedef struct Astr Astr;
@@ -109,9 +111,15 @@ int main(void)
 		for(j = 0; j < NASTR; j++) {
 			if(astr[j].o != NULL) {
 				if(astr[j].t == -1) {
+					ap = astr[j].o->cp;
+					if(((ship.cp->y-SHBH/2 >= ap->y-ASTRR && ship.cp->y-SHBH/2 <= ap->y+ASTRR) || (ship.cp->y+SHBH/2 >= ap->y-ASTRR && ship.cp->y+SHBH/2 <= ap->y+ASTRR)) &&
+						((ship.cp->x+SHBW/2 >= ap->x-ASTRR && ship.cp->x+SHBW/2 <= ap->x+ASTRR) || (ship.cp->x-SHBW/2 >= ap->x-ASTRR && ship.cp->x-SHBW/2 <= ap->x+ASTRR))) {
+						printf("game over\n");
+						SDL_Quit();
+						return 0;
+					}
 					for(k = 0; k < NBLT; k++)
 						if(blt[k].o != NULL) {
-							ap = astr[j].o->cp;
 							bp = blt[k].o->p1;
 							if(bp->x >= ap->x-ASTRR && bp->x <= ap->x+ASTRR && bp->y <= ap->y+ASTRR && bp->y >= ap->y-ASTRR) {
 								astr[j].t = FIZDUR;
