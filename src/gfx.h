@@ -24,6 +24,7 @@ typedef struct		Kevs Kevs;
 typedef struct		Pvec Pvec;
 
 enum {
+	ONONE,
 	OLINE,
 	ORECT,
 	OCIRC,
@@ -66,6 +67,7 @@ struct Obj {
 	Obj	*back;
 	Ctx	*ctx;
 	Pvec	*pts;
+	int	hide;
 	union {
 		struct {		/* line */
 			Point *p0, *p1;
@@ -124,6 +126,7 @@ void	trctx(Ctx *, int, double, double, double, double, double);
 void	trobj(Obj *, int, double, double, double, double, double);
 void	adjobj(Obj *, double, double, double);
 void	rotobj(Obj *, double, double, double);
+void	rotctx(Ctx *, double, double, double);
 void	drawctx(Ctx *);
 void	drawobj(Obj *);
 Obj	*addobj(Ctx *, uint32);

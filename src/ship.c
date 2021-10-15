@@ -1,14 +1,17 @@
 #include "gfx.h"
 
-#define NMAP	100
 #define TICKMS	20
 #define SBASE	8
+#define SBRAT	0.2
+#define STRAT	0.2
+#define NTRAIL	5
+#define TRACD	10
+#define STDEC	(SBASE+0.01)/NTRAIL
 #define SHT	25
 #define BLHT	10
 #define BLDUR	1000/TICKMS
 #define YAW	0.05
-#define SPEED	4
-#define ROTSP	2.25
+#define ROTSP	1.5
 #define BLTSP	10
 #define SCD	10
 #define NBLT	BLDUR/SCD
@@ -20,6 +23,9 @@
 #define FIZDEC	10
 #define SHBW	SBASE*0.75
 #define SHBH	SHT*0.75
+#define VELMAX	5
+#define VELINC	0.1
+#define SBOX	ASTRR*2
 
 typedef struct Bullet Bullet;
 typedef struct Astr Astr;
@@ -43,26 +49,33 @@ Ctx	*bltctx;
 
 struct {
 	Obj *o;
+	Obj *b;
+	Obj *t[NTRAIL];
 	Point *cp;
 	double ang;
+	double vel;
 	Ctx *ctx;
 } ship;
 
-void yaw(int d)
+void yaw(double d)
 {
 	double r;
 
 	r = d*YAW;
 	ship.ang += r;
-	rotobj(ship.o, ship.cp->x, ship.cp->y, r);
+	rotctx(ship.ctx, ship.cp->x, ship.cp->y, r);
 }
 
-void thrust(int d)
+void thrust(double d)
 {
 	double xtr, ytr;
 
-	xtr = ship.ctx->xtr + d*cos(ship.ang);
-	ytr = ship.ctx->ytr + d*-sin(ship.ang);
+	if(d != 0 && ship.vel+d <= VELMAX && ship.vel+d >= 0)
+		ship.vel += d;
+	else if(ship.vel+d < 0)
+		ship.vel = 0;
+	xtr = ship.ctx->xtr + ship.vel*cos(ship.ang);
+	ytr = ship.ctx->ytr + ship.vel*-sin(ship.ang);
 	trctx(ship.ctx, TRX|TRY|TVX|TVY, 0, xtr, ytr, xtr, ytr);
 	trctx(bltctx, TVX|TVY, 0, 0, 0, xtr, ytr);
 	trctx(astrctx, TVX|TVY, 0, 0, 0, xtr, ytr);
@@ -70,6 +83,8 @@ void thrust(int d)
 
 void ginit(void)
 {
+	int i;
+
 	init();
 	ship.ctx = newctx();
 	astrctx = newctx();
@@ -80,26 +95,33 @@ void ginit(void)
 	ship.ang = PI/2;
 	ship.cp = newpt(W/2, H/2 - SHT/2);
 	settri(ship.o = addobj(ship.ctx, w), W/2-SBASE, H/2, W/2+SBASE, H/2, W/2, H/2-SHT);
-
+	setline(ship.b = addobj(ship.ctx, w), W/2-SBASE, H/2+SBRAT*SHT, W/2+SBASE, H/2+SBRAT*SHT);
+	for(i = 0; i < NTRAIL; i++) {
+		setline(ship.t[i] = addobj(ship.ctx, w), W/2-SBASE+(i+1)*STDEC, H/2+SBRAT*SHT+STRAT*SHT*(i+1), W/2+SBASE-(i+1)*STDEC, H/2+SBRAT*SHT+STRAT*SHT*(i+1));
+		ship.t[i]->hide = 1;
+	}
 	drawctx(ship.ctx);
 	draw(1, ship.ctx);
 }
 
 int main(void)
 {
-	int i, j, k;
-	int lt, ct, et, fps, cev, scd, iblt, nblt, iastr, nastr, tastr, fiz;
+	int i, j, k, x, y;
+	int lt, ct, et, fps, cev, scd, iblt, nblt, iastr, nastr, tastr, fiz, acl, pacl, itra, tracd;
 	Point *ap, *bp;
 
 	ginit();
-	et = fps = scd = iblt = nblt = iastr = nastr = tastr = fiz = 0;
+	et = fps = scd = iblt = nblt = iastr = nastr = tastr = fiz = acl = pacl = itra = tracd = 0;
 	for(i = 0;;) {
 		lt = SDL_GetTicks();
 		input();
 		if(++tastr == TASTR) {
 			tastr = 0;
 			if(iastr != -1) {
-				setcirc(astr[iastr].o = addobj(astrctx, w), rand()%W, rand()%H, ASTRR);
+				/* dont make astrr too large... */
+				do { x = rand()%H; } while(x >= ship.cp->x-SBOX && x <= ship.cp->x+SBOX);
+				do { y = rand()%H; } while(y >= ship.cp->y-SBOX && y <= ship.cp->y+SBOX);
+				setcirc(astr[iastr].o = addobj(astrctx, w), x, y, ASTRR);
 				drawobj(astr[iastr].o);
 				trobj(astr[iastr].o, TVX|TVY, 0, 0, 0, astrctx->vbx, astrctx->vby);
 				astr[iastr].t = -1;
@@ -178,12 +200,22 @@ int main(void)
 			cev = 1;
 		}
 		if(keyev[SDLK_w].state == KEYDOWN || keyev[SDLK_w].state == KEYHELD) {
-			thrust(SPEED);
-			cev = 1;
+			thrust(VELINC);
+			acl = cev = 1;
+			if(tracd == 0) {
+				//rotobj(ship.t[itra], ship.cp->x, ship.cp->y, ship.ang-PI/2);
+				ship.t[itra]->hide = 0;
+				itra++;
+				itra %= NTRAIL;
+				tracd = TRACD;
+			}
+			tracd--;
 		}
 		if(keyev[SDLK_s].state == KEYDOWN || keyev[SDLK_s].state == KEYHELD) {
-			thrust(-SPEED);
+			thrust(-VELINC);
 			cev = 1;
+			acl = -1;
+			ship.b->hide = 1;
 		}
 		if(scd == 0 && (keyev[SDLK_SPACE].state == KEYDOWN || keyev[SDLK_SPACE].state == KEYHELD)) {
 			if(iblt == -1)
@@ -200,7 +232,17 @@ int main(void)
 		}
 		if(!et) {
 			fps++;
-			if(cev || nblt || fiz)
+			if(pacl == -1 && acl != -1) {
+				ship.b->hide = 0;
+			} else if(pacl == 1 && acl != 1) {
+				for(j = 0; j < NTRAIL; j++)
+					ship.t[j]->hide = 1;
+				tracd = 0;
+				itra = 0;
+			}
+			if(acl == 0)
+				thrust(0);
+			if(cev || nblt || fiz || ship.vel || pacl != 0)
 				draw(3, ship.ctx, bltctx, astrctx);
 			clrast();
 		}
@@ -217,7 +259,8 @@ int main(void)
 		}
 		i++;
 		i %= 1000/TICKMS;
-		cev = 0;
+		pacl = acl;
+		cev = acl = 0;
 		if(ct-lt < TICKMS)
 			SDL_Delay(TICKMS - (ct-lt));
 	}

@@ -76,7 +76,7 @@ void draw(int n, ...)
 	for(i = 0; i < n; i++) {
 		ctx = va_arg(arg, Ctx *);
 		for(j = 0; j < NCTX; j++)
-			for(o = ctx->o[j]; o != NULL; o = o->link)
+			for(o = ctx->o[j]; o != NULL && !o->hide; o = o->link)
 				for(k = 0; k < o->pts->n; k++) {
 					if(o->pts->y[k] >= H || o->pts->y[k] < 0 || o->pts->x[k] >= W || o->pts->x[k] < 0 || o->pts->rem[k])
 						continue;
@@ -314,6 +314,8 @@ void adjobj(Obj *o, double x, double y, double s)
 	}
 
 	switch(o->type) {
+	case ONONE:
+		break;
 	case OLINE:
 		tr(o->p0);
 		tr(o->p1);
@@ -353,6 +355,17 @@ void rotobj(Obj *o, double cx, double cy, double rad)
 		rot(&o->pts->x[i], &o->pts->y[i], cx, cy, rad);
 }
 
+void rotctx(Ctx *ctx, double cx, double cy, double rad)
+{
+	int i, j;
+	Obj *o;
+
+	for(i = 0; i < NCTX; i++)
+		for(o = ctx->o[i]; o != NULL; o = o->link)
+			for(j = 0; j < o->pts->n; j++)
+				rot(&o->pts->x[j], &o->pts->y[j], cx, cy, rad);
+}
+
 void drawctx(Ctx *ctx)
 {
 	int i, j;
@@ -362,6 +375,8 @@ void drawctx(Ctx *ctx)
 		for(o = ctx->o[i]; o != NULL; o = o->link) {
 			o->pts->n = 0;
 			switch(o->type) {
+			case ONONE:
+				break;
 			case OLINE:
 				putline(o, o->p0->x, o->p0->y, o->p1->x, o->p1->y);
 				break;
@@ -428,6 +443,8 @@ Obj *addobj(Ctx *ctx, uint32 col)
 	o->pts->x = emalloc(VECINC*sizeof(double));
 	o->pts->y = emalloc(VECINC*sizeof(double));
 	o->pts->rem = ecalloc(REMINC, sizeof(int));
+	o->hide = 0;
+	o->type = ONONE;
 
 	if((d = ctx->o[o->id % NCTX]) != NULL) {
 		d->back = o;
@@ -449,6 +466,8 @@ void remobj(Obj *o)
 	free(o->pts->y);
 	free(o->pts);
 	switch(o->type) {
+	case ONONE:
+		break;
 	case OLINE:
 		free(o->p0);
 		free(o->p1);
