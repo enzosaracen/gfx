@@ -1,9 +1,11 @@
 CC	= gcc
 CFLAGS	= -Wall -Wextra -ggdb3 -lm $(shell sdl-config --cflags --libs)
 OBJ	= src/gfx.o \
-	  src/ship.o
+	  src/2d.o
+	  # src/ship.o
 
-HFILES	= src/gfx.h
+HFILES	= src/gfx.h \
+	  src/2d.h
 
 %.o:	%.c $(HFILES)
 	$(CC) -o $@ -c $< $(CFLAGS)

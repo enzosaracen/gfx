@@ -63,11 +63,13 @@ void yaw(double d)
 
 	r = d*YAW;
 	ship.ang += r;
-	rotctx(ship.ctx, ship.cp->x, ship.cp->y, r);
+	rotobj(ship.o, ship.cp->x, ship.cp->y, r);
+	rotobj(ship.b, ship.cp->x, ship.cp->y, r);
 }
 
 void thrust(double d)
 {
+	int i;
 	double xtr, ytr;
 
 	if(d != 0 && ship.vel+d <= VELMAX && ship.vel+d >= 0)
@@ -76,7 +78,10 @@ void thrust(double d)
 		ship.vel = 0;
 	xtr = ship.ctx->xtr + ship.vel*cos(ship.ang);
 	ytr = ship.ctx->ytr + ship.vel*-sin(ship.ang);
-	trctx(ship.ctx, TRX|TRY|TVX|TVY, 0, xtr, ytr, xtr, ytr);
+	trobj(ship.o, TRX|TRY|TVX|TVY, 0, xtr, ytr, xtr, ytr);
+	trobj(ship.b, TRX|TRY|TVX|TVY, 0, xtr, ytr, xtr, ytr);
+	for(i = 0; i < NTRAIL; i++)
+		trobj(ship.t[i], TVX|TVY, 0, 0, 0, xtr, ytr);
 	trctx(bltctx, TVX|TVY, 0, 0, 0, xtr, ytr);
 	trctx(astrctx, TVX|TVY, 0, 0, 0, xtr, ytr);
 }
@@ -202,14 +207,15 @@ int main(void)
 		if(keyev[SDLK_w].state == KEYDOWN || keyev[SDLK_w].state == KEYHELD) {
 			thrust(VELINC);
 			acl = cev = 1;
-			if(tracd == 0) {
-				//rotobj(ship.t[itra], ship.cp->x, ship.cp->y, ship.ang-PI/2);
-				ship.t[itra]->hide = 0;
+			/*if(tracd == 0) {
+				remobj(ship.t[itra]);
+				setline(ship.t[itra] = addobj(ship.ctx, w), ship.cp->x-SBASE/2, ship.cp->y+SHT/2, ship.cp->x+SBASE/2, ship.cp->y+SHT/2);
+				rotobj(ship.t[itra], ship.cp->x, ship.cp->y, ship.ang);
 				itra++;
 				itra %= NTRAIL;
 				tracd = TRACD;
 			}
-			tracd--;
+			tracd--;*/
 		}
 		if(keyev[SDLK_s].state == KEYDOWN || keyev[SDLK_s].state == KEYHELD) {
 			thrust(-VELINC);

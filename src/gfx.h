@@ -7,11 +7,10 @@
 
 #define W 		500
 #define H 		500
-#define NCTX		100
-#define NLIST		1000
 #define PI		M_PI
-#define VECINC		50
-#define REMINC		50
+#define PTVECINC	50
+#define OVECINC		10
+#define LISTINC		1000
 
 typedef uint8_t		uint8;
 typedef uint32_t	uint32;
@@ -21,7 +20,8 @@ typedef struct		Point Point;
 typedef struct		Obj Obj;
 typedef struct		Ctx Ctx;
 typedef struct		Kevs Kevs;
-typedef struct		Pvec Pvec;
+typedef struct		Ptvec Ptvec;
+typedef struct		Ovec Ovec;
 
 enum {
 	ONONE,
@@ -47,11 +47,19 @@ enum {
 	TVY = 1<<4,
 };
 
-struct Pvec {
+struct Ptvec {
 	int n;
 	double *x, *y;
 	/* indices in rem will be ignored */
 	int *rem;
+	int max;
+};
+
+struct Ovec {
+	int n;
+	Obj **o;
+	int *avail;
+	int navail;
 	int max;
 };
 
@@ -60,13 +68,11 @@ struct Point {
 };
 
 struct Obj {
-	uint	id;
+	int	i;
 	int	type;
 	uint32	col;
-	Obj	*link;
-	Obj	*back;
 	Ctx	*ctx;
-	Pvec	*pts;
+	Ptvec	*pts;
 	int	hide;
 	union {
 		struct {		/* line */
@@ -82,7 +88,8 @@ struct Obj {
 		};
 		struct {		/* list */
 			int n;
-			Point *a;
+			int max;
+			Point *l;
 		};
 		struct {		/* triangle */
 			Point *t0, *t1, *t2;
@@ -90,11 +97,9 @@ struct Obj {
 	};
 };
 
-/* wrap-around array of size NCTX, collisions handled using obj links */
 struct Ctx {
-	uint		cid;
-	Obj		**o;
-	double		scale, xtr, ytr, vbx, vby, rot;
+	Ovec	*v;
+	double	scale, xtr, ytr, vbx, vby, rot;
 };
 
 struct Kevs {
@@ -110,8 +115,8 @@ void	*ecalloc(size_t, size_t);
 void	*erealloc(void *, size_t);
 void	init();
 void	draw(int, ...);
-void	addpts(Pvec *, int, int);
-void	rempts(Pvec *, int);
+void	addpts(Ptvec *, int, int);
+void	rempts(Ptvec *, int);
 void	clrast(void);
 uint32	rgb(uint8, uint8, uint8);
 void	putline(Obj *, int, int, int, int);
@@ -139,3 +144,4 @@ void	setlist(Obj *);
 void	rot(double *, double *, double, double, double);
 void	rotp(Point *, Point *, double);
 void	input(void);
+int	loopdelay(int, int, int, int *);

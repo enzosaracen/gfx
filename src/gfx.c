@@ -75,14 +75,17 @@ void draw(int n, ...)
 	va_start(arg, n);
 	for(i = 0; i < n; i++) {
 		ctx = va_arg(arg, Ctx *);
-		for(j = 0; j < NCTX; j++)
-			for(o = ctx->o[j]; o != NULL && !o->hide; o = o->link)
-				for(k = 0; k < o->pts->n; k++) {
-					if(o->pts->y[k] >= H || o->pts->y[k] < 0 || o->pts->x[k] >= W || o->pts->x[k] < 0 || o->pts->rem[k])
-						continue;
-					for(l = 0; l < 4; l++)
+		for(j = 0; j < ctx->v->n; j++) {
+			o = ctx->v->o[j];
+			if(o == NULL || o->hide)
+				continue;
+			for(k = 0; k < o->pts->n; k++) {
+				if(o->pts->y[k] >= H || o->pts->y[k] < 0 || o->pts->x[k] >= W || o->pts->x[k] < 0 || o->pts->rem[k])
+					continue;
+				for(l = 0; l < 4; l++)
 						rast[((int)o->pts->y[k]*W + (int)o->pts->x[k])*4 + l] = o->col>>i*8 & 0xff;
-				}
+			}
+		}
 	}
 	if(SDL_LockSurface(scr) < 0)
 		sdlerror("SDL_LockSurface");
@@ -91,12 +94,12 @@ void draw(int n, ...)
 	SDL_UpdateRect(scr, 0, 0, 0, 0);
 }
 
-void addpts(Pvec *p, int x, int y)
+void addpts(Ptvec *p, int x, int y)
 {
 	int i;
 
-	if(p->n >= p->max-1) {
-		p->max += VECINC;
+	if(p->n >= p->max) {
+		p->max += PTVECINC;
 		p->x = erealloc(p->x, p->max*sizeof(double));
 		p->y = erealloc(p->y, p->max*sizeof(double));
 		p->rem = erealloc(p->rem, p->max*sizeof(int));
@@ -107,7 +110,7 @@ void addpts(Pvec *p, int x, int y)
 	p->y[p->n++] = y;
 }
 
-void rempts(Pvec *p, int i)
+void rempts(Ptvec *p, int i)
 {
 	if(i < p->n)
 		p->rem[i] = 1;
@@ -192,7 +195,8 @@ void putcirc(Obj *o, int cx, int cy, int r)
 	}
 }
 
-void puttri(Obj *o, int x0, int y0, int x1, int y1, int x2, int y2) {
+void puttri(Obj *o, int x0, int y0, int x1, int y1, int x2, int y2)
+{
 	putline(o, x0, y0, x1, y1);
 	putline(o, x1, y1, x2, y2);
 	putline(o, x2, y2, x0, y0);
@@ -200,21 +204,24 @@ void puttri(Obj *o, int x0, int y0, int x1, int y1, int x2, int y2) {
 
 void addlist(Obj *o, Point *p)
 {
-	o->a[o->n].x = p->x;
-	o->a[o->n++].y = p->y;
-	if(o->n >= NLIST)
-		errorf("list too large");
+	o->l[o->n].x = p->x;
+	o->l[o->n++].y = p->y;
+	if(o->n >= o->max) {
+		o->max += LISTINC;
+		o->l = erealloc(o->l, o->max*sizeof(Point));
+	}
 }
 
 Ctx *newctx(void)
 {
-	int i;
 	Ctx *ctx;
 
 	ctx = ecalloc(sizeof(Ctx), 1);
-	ctx->o = emalloc(NCTX*sizeof(Obj*));
-	for(i = 0; i < NCTX; i++)
-		ctx->o[i] = NULL;
+	ctx->v = emalloc(sizeof(Ovec));
+	ctx->v->n = ctx->v->navail = 0;
+	ctx->v->max = OVECINC;
+	ctx->v->o = emalloc(OVECINC*sizeof(Obj*));
+	ctx->v->avail = emalloc(OVECINC*sizeof(int));
 	ctx->scale = 1;
 	return ctx;
 }
@@ -257,18 +264,19 @@ void trctx(Ctx *ctx, int type, double sf, double xtr, double ytr, double vbx, do
 		ctx->vby = vby-ctx->vby;
 		y -= ctx->vby;
 	}
-	for(i = 0; i < NCTX; i++) {
-		for(o = ctx->o[i]; o != NULL; o = o->link) {
-			for(j = 0; j < o->pts->n; j++) {
-				o->pts->x[j] += x;
-				o->pts->y[j] += y;
-				if(type & TSF) {
-					o->pts->x[j] = s*(W/2-o->pts->x[j]) + W/2;
-					o->pts->y[j] = s*(H/2-o->pts->y[j]) + H/2;
-				}
+	for(i = 0; i < ctx->v->n; i++) {
+		o = ctx->v->o[i];
+		if(o == NULL)
+			continue;
+		for(j = 0; j < o->pts->n; j++) {
+			o->pts->x[j] += x;
+			o->pts->y[j] += y;
+			if(type & TSF) {
+				o->pts->x[j] = s*(W/2-o->pts->x[j]) + W/2;
+				o->pts->y[j] = s*(H/2-o->pts->y[j]) + H/2;
 			}
-			adjobj(o, x, y, s);
 		}
+		adjobj(o, x, y, s);
 	}
 }
 
@@ -360,10 +368,13 @@ void rotctx(Ctx *ctx, double cx, double cy, double rad)
 	int i, j;
 	Obj *o;
 
-	for(i = 0; i < NCTX; i++)
-		for(o = ctx->o[i]; o != NULL; o = o->link)
-			for(j = 0; j < o->pts->n; j++)
-				rot(&o->pts->x[j], &o->pts->y[j], cx, cy, rad);
+	for(i = 0; i < ctx->v->n; i++) {
+		o = ctx->v->o[i];
+		if(o == NULL)
+			continue;
+		for(j = 0; j < o->pts->n; j++)
+			rot(&o->pts->x[j], &o->pts->y[j], cx, cy, rad);
+	}
 }
 
 void drawctx(Ctx *ctx)
@@ -371,31 +382,32 @@ void drawctx(Ctx *ctx)
 	int i, j;
 	Obj *o;
 
-	for(i = 0; i < NCTX; i++) {
-		for(o = ctx->o[i]; o != NULL; o = o->link) {
-			o->pts->n = 0;
-			switch(o->type) {
-			case ONONE:
-				break;
-			case OLINE:
-				putline(o, o->p0->x, o->p0->y, o->p1->x, o->p1->y);
-				break;
-			case ORECT:
-				putrect(o, o->rp->x, o->rp->y, o->w, o->h);
-				break;
-			case OCIRC:
-				putcirc(o, o->cp->x, o->cp->y, o->r);
-				break;
-			case OTRI:
-				puttri(o, o->t0->x, o->t0->y, o->t1->x, o->t1->y, o->t2->x, o->t2->y);
-				break;
-			case OLIST:
-				for(j = 0; j < o->n; j++)
-					addpts(o->pts, o->a[j].x, o->a[j].y);
-				break;
-			default:
-				errorf("bad obj type in drawctx");
-			}
+	for(i = 0; i < ctx->v->n; i++) {
+		o = ctx->v->o[i];
+		if(o == NULL)
+			continue;
+		o->pts->n = 0;
+		switch(o->type) {
+		case ONONE:
+			break;
+		case OLINE:
+			putline(o, o->p0->x, o->p0->y, o->p1->x, o->p1->y);
+			break;
+		case ORECT:
+			putrect(o, o->rp->x, o->rp->y, o->w, o->h);
+			break;
+		case OCIRC:
+			putcirc(o, o->cp->x, o->cp->y, o->r);
+			break;
+		case OTRI:
+			puttri(o, o->t0->x, o->t0->y, o->t1->x, o->t1->y, o->t2->x, o->t2->y);
+			break;
+		case OLIST:
+			for(j = 0; j < o->n; j++)
+				addpts(o->pts, o->l[j].x, o->l[j].y);
+			break;
+		default:
+			errorf("bad obj type in drawctx");
 		}
 	}
 }
@@ -420,7 +432,7 @@ void drawobj(Obj *o)
 		break;
 	case OLIST:
 		for(i = 0; i < o->n; i++)
-			addpts(o->pts, o->a[i].x, o->a[i].y);
+			addpts(o->pts, o->l[i].x, o->l[i].y);
 		break;
 	default:
 		errorf("bad obj type in drawobj");
@@ -429,39 +441,38 @@ void drawobj(Obj *o)
 
 Obj *addobj(Ctx *ctx, uint32 col)
 {
-	Obj *o, *d;
+	Obj *o;
 
 	o = emalloc(sizeof(Obj));
 	o->ctx = ctx;
-	o->id = ctx->cid++;
 	o->col = col;
-	o->link = NULL;
-	o->back = NULL;
-	o->pts = emalloc(sizeof(Pvec));
+	o->pts = emalloc(sizeof(Ptvec));
 	o->pts->n = 0;
-	o->pts->max = VECINC;
-	o->pts->x = emalloc(VECINC*sizeof(double));
-	o->pts->y = emalloc(VECINC*sizeof(double));
-	o->pts->rem = ecalloc(REMINC, sizeof(int));
+	o->pts->max = PTVECINC;
+	o->pts->x = emalloc(PTVECINC*sizeof(double));
+	o->pts->y = emalloc(PTVECINC*sizeof(double));
+	o->pts->rem = ecalloc(PTVECINC, sizeof(int));
 	o->hide = 0;
 	o->type = ONONE;
-
-	if((d = ctx->o[o->id % NCTX]) != NULL) {
-		d->back = o;
-		o->link = d;
+	if(ctx->v->navail > 0)
+		o->i = ctx->v->avail[--ctx->v->navail];
+	else {
+		o->i = ctx->v->n++;
+		if(ctx->v->n >= ctx->v->max) {
+			ctx->v->max += OVECINC;
+			erealloc(ctx->v->o, ctx->v->max*sizeof(Obj));
+			erealloc(ctx->v->avail, ctx->v->max*sizeof(int));
+		
+		}
 	}
-	ctx->o[o->id % NCTX] = o;
+	ctx->v->o[o->i] = o;
 	return o;
 }
 
 void remobj(Obj *o)
 {
-	if(o->back != NULL)
-		o->back->link = o->link;
-	if(o->link != NULL)
-		o->link->back = o->back;
-	if(o->back == NULL)
-		o->ctx->o[o->id % NCTX] = o->link;
+	o->ctx->v->avail[o->ctx->v->navail++] = o->i;
+	o->ctx->v->o[o->i] = NULL;
 	free(o->pts->x);
 	free(o->pts->y);
 	free(o->pts);
@@ -484,7 +495,7 @@ void remobj(Obj *o)
 		free(o->t2);
 		break;
 	case OLIST:
-		free(o->a);
+		free(o->l);
 		break;
 	default:
 		errorf("bad obj type in remobj");
@@ -526,7 +537,8 @@ void setlist(Obj *o)
 {
 	o->type = OLIST;
 	o->n = 0;
-	o->a = emalloc(NLIST*sizeof(*o->a));
+	o->max = LISTINC;
+	o->l = emalloc(LISTINC*sizeof(Point));
 }
 
 void rot(double *x, double *y, double cx, double cy, double rad)
@@ -576,4 +588,18 @@ void input(void)
 			keyev[ev.key.keysym.sym].nup++;
 			break;
 		}
+}
+
+int loopdelay(int tms, int st, int et, int *err)
+{
+	if(*err) {
+		*err -= tms + (et-st);
+		if(*err < 0)
+			*err = 0;
+		return 0;
+	} else if(et-st > tms) {
+		*err = et-st;
+		return 0;
+	} else
+		return tms - (et-st);
 }
